@@ -181,6 +181,11 @@ def cancel_during_churn(df_filtered):
 df_filtered = cancel_during_churn(df_filtered)
 
 
+
+# %%
+
+
+
 # Plotting the cancelation rates with bar of pie chart
 def plot_cancelation_rates(df_filtered):
     """Plot the cancelation rates with bar of pie chart showing percentages"""
@@ -268,6 +273,11 @@ def plot_cancelation_rates(df_filtered):
 plot_cancelation_rates(df_filtered)
 
 
+
+# %%
+
+
+
  # Plotting evolution of active members over time
  # Plotting evolution of subscription over time 
 
@@ -291,6 +301,11 @@ def plot_active_members_over_time(df_filtered):
     plt.show()
 
 plot_active_members_over_time(df_filtered)
+
+
+
+# %%
+
 
 
 # Plotting evolution of active members over time (cumulative)
@@ -333,6 +348,12 @@ def create_past_weeks_dataframe(df_filtered, weeks=5):
     return df_recent
 
 df_recent = create_past_weeks_dataframe(df_filtered, weeks=5)
+
+
+
+# %%
+
+
 
 # Bar plot new active members last 5 weeks
 def plot_new_active_members_last_weeks(df_recent, weeks=5):
@@ -404,7 +425,7 @@ def last_week_analysis(df_filtered):
 
 last_week_analysis(df_filtered) 
 
-
+# %%
 
 # PREVIOUS WEEK ANALYSIS 
 def previous_week_analysis(df_filtered):
@@ -433,6 +454,10 @@ def previous_week_analysis(df_filtered):
 previous_week_analysis(df_filtered)
 
 
+# %%
+
+
+
 # LAST 6 MONTHS ANALYSIS (mean by weeks)
 def last_6_months_analysis(df_filtered):
     """Analyze the last 6 months of active members"""
@@ -458,3 +483,7 @@ def last_6_months_analysis(df_filtered):
     print(f"Mean Cancel during Churn per Week: {df_last_6_months[df_last_6_months['canceled_during_churn'] == True].groupby('week').size().mean():.2f}")
 
 last_6_months_analysis(df_filtered)
+
+
+# %%
+
