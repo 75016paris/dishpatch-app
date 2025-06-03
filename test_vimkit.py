@@ -541,3 +541,20 @@ def last_6_months_analysis(df):
 last_6_months_analysis(df)
 
 
+# %% [markdown]
+
+#Subscription without trial
+##GIFTED
+866 subscription without trial
+58,7% of (all untrailed subscription) are gifted
+
+##UN-GIFTED
+200 subscription without trial
+13.5% of (all untrailed subscription) are un-gifted
+
+16 sept 2024 > 97.7 Conversion rate 43%
+23 sept 2024 > 100 Conversion rate 54%
+
+11 sept 2024 > Massive subscription (300+) Conversion rate 41%
+
+# %% [markdown]
