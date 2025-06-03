@@ -13,17 +13,25 @@ from datetime import datetime
 # Setting up the plotting style
 plt.rcParams.update({'font.size': 11, 'axes.labelsize': 10, 'axes.titlesize': 16})
 plt.rcParams['axes.facecolor'] = 'white'
-plt.rcParams['figure.facecolor'] = 'white'
+plt.rcParams['figure.facecolor'] = 'black'
 plt.rcParams['axes.edgecolor'] = 'white'
 plt.rcParams['xtick.color'] = 'white'
 plt.rcParams['ytick.color'] = 'white'
 plt.rcParams['figure.figsize'] = (22, 11)
+
+# Grille avec opacité et en arrière-plan
 plt.rcParams['axes.grid'] = True
-plt.rcParams['grid.color'] = 'gray'
+plt.rcParams['grid.color'] = 'lightgray'
+plt.rcParams['grid.alpha'] = 0.5
+plt.rcParams['axes.axisbelow'] = True
+
 plt.rcParams['axes.titleweight'] = 'bold'
 plt.rcParams['axes.titlecolor'] = 'white'
 plt.rcParams['axes.labelcolor'] = 'white'
 plt.rcParams['legend.title_fontsize'] = 'large'
+#clt.rcParams['legend.facecolor'] = 'darkgray'
+plt.rcParams['legend.edgecolor'] = 'white'
+plt.rcParams['text.color'] = 'white'
 sns.set_palette("viridis")
 
 # %%
@@ -160,13 +168,6 @@ df =  clean_membership_data(df)
 
 # Filter out gifted members and analyze the data
 
-def filter_gifted_members(df):
-    """Filter out gifted members from the DataFrame"""
-    return df[df['is_gifted_member'] == False].drop(columns=['is_gifted_member'])
-
-df_filtered = filter_gifted_members(df)
-
-
 def gifted_members(df):
     """Filter  gifted members from the DataFrame"""
     return df[df['is_gifted_member'] == True].drop(columns=['is_gifted_member'])
@@ -174,48 +175,57 @@ def gifted_members(df):
 df_gifted = gifted_members(df)
 
 
+
+def filter_gifted_members(df):
+    """Filter out gifted members from the DataFrame"""
+    return df[df['is_gifted_member'] == False].drop(columns=['is_gifted_member'])
+
+df = filter_gifted_members(df)
+
+
+
 # %%
 
 # IN CHURN PERIOD
-def in_churn_period(df_filtered):
+def in_churn_period(df):
     """Check if a member is in the churn period (14 days after trial end)"""
     # S'assurer que les colonnes sont en format datetime
-    df_filtered['in_churn_period'] = (
-        (df_filtered['trial_end_utc'] + pd.Timedelta(days=14) > pd.to_datetime(reference_date)) &
-        (df_filtered['status'] == 'active')
+    df['in_churn_period'] = (
+        (df['trial_end_utc'] + pd.Timedelta(days=14) > pd.to_datetime(reference_date)) &
+        (df['status'] == 'active')
     )
-    return df_filtered
+    return df
 
-df_filtered = in_churn_period(df_filtered)
+df = in_churn_period(df)
 
 # %%
 
 # CANCEL DURING TRIAL PERIOD
-def cancel_during_trial(df_filtered):
+def cancel_during_trial(df):
     """Check if a member canceled during their trial period"""
     # S'assurer que les colonnes sont en format datetime
-    df_filtered['canceled_during_trial'] = (
-        (df_filtered['canceled_at_utc'].notna()) & 
-        (df_filtered['trial_end_utc'] > df_filtered['canceled_at_utc']) 
+    df['canceled_during_trial'] = (
+        (df['canceled_at_utc'].notna()) & 
+        (df['trial_end_utc'] > df['canceled_at_utc']) 
     )
-    return df_filtered
+    return df
 
-df_filtered = cancel_during_trial(df_filtered) 
+df = cancel_during_trial(df) 
 
 
 # CANCEL DURRING CHURN PERIOD
 # if not canceled during trial, check if canceled  during churn period (14days after trial end)
-def cancel_during_churn(df_filtered):
+def cancel_during_churn(df):
     """Check if a member canceled during their churn period (14 days after trial end)"""
     # S'assurer que les colonnes sont en format datetime
-    df_filtered['canceled_during_churn'] = (
-        (df_filtered['canceled_during_trial'] == False) &
-        (df_filtered['trial_end_utc'] + pd.Timedelta(days=14) > df_filtered['canceled_at_utc']) &
-        (df_filtered['trial_end_utc'].notna())
+    df['canceled_during_churn'] = (
+        (df['canceled_during_trial'] == False) &
+        (df['trial_end_utc'] + pd.Timedelta(days=14) > df['canceled_at_utc']) &
+        (df['trial_end_utc'].notna())
     )
-    return df_filtered
+    return df
 
-df_filtered = cancel_during_churn(df_filtered)
+df = cancel_during_churn(df)
 
 
 
@@ -224,21 +234,21 @@ df_filtered = cancel_during_churn(df_filtered)
 
 
 # Plotting the cancelation rates with bar of pie chart
-def plot_cancelation_rates(df_filtered):
+def plot_cancelation_rates(df):
     """Plot the cancelation rates with bar of pie chart showing percentages"""
-    trial_cancellations = df_filtered[df_filtered['canceled_during_trial'] == True]
-    churn_cancellations = df_filtered[df_filtered['canceled_during_churn'] == True]
-    other_canceled = df_filtered[
-        (df_filtered['status'] == 'canceled') & 
-        (df_filtered['canceled_during_trial'] == False) & 
-        (df_filtered['canceled_during_churn'] == False)
+    trial_cancellations = df[df['canceled_during_trial'] == True]
+    churn_cancellations = df[df['canceled_during_churn'] == True]
+    other_canceled = df[
+        (df['status'] == 'canceled') & 
+        (df['canceled_during_trial'] == False) & 
+        (df['canceled_during_churn'] == False)
     ] 
 
     # Calculer les totaux
     total_cancellations = len(trial_cancellations) + len(churn_cancellations) + len(other_canceled)   
 
     # Active Members
-    active_members = df_filtered[df_filtered['status'] == 'active']
+    active_members = df[df['status'] == 'active']
     
     
     # Données pour le camembert principal
@@ -251,15 +261,14 @@ def plot_cancelation_rates(df_filtered):
     detail_sizes = [len(other_canceled), len(trial_cancellations), len(churn_cancellations)]
     detail_colors = ['grey', 'orange', 'red']
     
-    # Créer la figure avec subplots
-    fig = plt.figure(figsize=(16, 8))
     
     
     # Subplot 1: Camembert principal
     ax1 = plt.subplot(1, 2, 1)
     wedges, texts, autotexts = ax1.pie(main_sizes, labels=main_labels, colors=main_colors,
-                                      autopct='%1.1f%%', shadow=True, startangle=90,
-                                      explode=(0.1, 0.1))
+                                       autopct='%1.1f%%', startangle=90, explode=(0.1, 0.1), 
+                                       textprops={'color': 'white', 'fontsize': 12,
+                                                  'fontweight': 'bold'})
     
     # Améliorer l'apparence du texte du camembert
     
@@ -269,7 +278,7 @@ def plot_cancelation_rates(df_filtered):
     ax2 = plt.subplot(1, 2, 2)
     
     # Calculer les pourcentages par rapport au total
-    total = len(df_filtered)
+    total = len(df)
     detail_percentages = [size/total*100 for size in detail_sizes]
     
     bars = ax2.bar(detail_labels, detail_sizes, color=detail_colors, alpha=0.8)
@@ -291,7 +300,8 @@ def plot_cancelation_rates(df_filtered):
     # Rotation des labels x pour une meilleure lisibilité
     plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
     
-    plt.tight_layout()
+    plt.tight_layout(pad=3.0)
+    plt.subplots_adjust(wspace=0.6)
     plt.show()
     
     # Afficher les statistiques détaillées avec pourcentages
@@ -307,7 +317,7 @@ def plot_cancelation_rates(df_filtered):
     print(f"└─ Churn Cancellations: {len(churn_cancellations):,} ({len(churn_cancellations)/total*100:.1f}%)")
     print("\n")
 
-plot_cancelation_rates(df_filtered)
+plot_cancelation_rates(df)
 
 
 
@@ -318,15 +328,14 @@ plot_cancelation_rates(df_filtered)
  # Plotting evolution of active members over time
  # Plotting evolution of subscription over time 
 
-def plot_active_members_over_time(df_filtered):
+def plot_active_members_over_time(df):
     """Plot the evolution of active members over time"""
-    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
+    df.loc[:, 'week'] = df['created_utc'].dt.tz_localize(None).dt.to_period('W')
 
-    active_counts = df_filtered[df_filtered['status'] == 'active'].groupby('week').size()
+    active_counts = df[df['status'] == 'active'].groupby('week').size()
 
-    subscription_counts = df_filtered.groupby('week').size()
+    subscription_counts = df.groupby('week').size()
 
-    plt.figure(figsize=(12, 6))
     active_counts.plot(color='green', alpha=0.7, label='Active full Members')
     subscription_counts.plot(color='grey', alpha=0.5, label='Total Subscriptions')
     
@@ -336,7 +345,7 @@ def plot_active_members_over_time(df_filtered):
     plt.tight_layout()
     plt.show()
 
-plot_active_members_over_time(df_filtered)
+plot_active_members_over_time(df)
 
 
 
@@ -346,17 +355,16 @@ plot_active_members_over_time(df_filtered)
 
 # Plotting evolution of active members over time (cumulative)
 
-def plot_cumulative_active_members_over_time(df_filtered):
+def plot_cumulative_active_members_over_time(df):
     """Plot the evolution of active members over time"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    df.loc[:, 'week'] = df['created_utc'].dt.tz_localize(None).dt.to_period('W')
 
-    active_counts = df_filtered[df_filtered['status'] == 'active'].groupby('week').size().cumsum()
+    active_counts = df[df['status'] == 'active'].groupby('week').size().cumsum()
 
-    subscription_counts = df_filtered.groupby('week').size().cumsum()
+    subscription_counts = df.groupby('week').size().cumsum()
 
 
-    plt.figure(figsize=(12, 6))
 
     subscription_counts.plot(color='grey', alpha=0.5, label='Subscriptions')
     active_counts.plot(color='green', alpha=0.7, label='Active Full Members')
@@ -371,19 +379,19 @@ def plot_cumulative_active_members_over_time(df_filtered):
     plt.tight_layout()
     plt.show()
 
-plot_cumulative_active_members_over_time(df_filtered)
+plot_cumulative_active_members_over_time(df)
 
 
 # Creating dataframe for past 5 weeks analysis
-def create_past_weeks_dataframe(df_filtered, weeks=5):
+def create_past_weeks_dataframe(df, weeks=5):
     """Create a DataFrame for the last 'weeks' weeks"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
-    recent_weeks = df_filtered['week'].unique()[-weeks:]
-    df_recent = df_filtered[df_filtered['week'].isin(recent_weeks)]
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    df.loc[:, 'week'] = df['created_utc'].dt.tz_localize(None).dt.to_period('W')
+    recent_weeks = df['week'].unique()[-weeks:]
+    df_recent = df[df['week'].isin(recent_weeks)]
     return df_recent
 
-df_recent = create_past_weeks_dataframe(df_filtered, weeks=5)
+df_recent = create_past_weeks_dataframe(df, weeks=5)
 
 
 
@@ -394,17 +402,16 @@ df_recent = create_past_weeks_dataframe(df_filtered, weeks=5)
 # Bar plot new active members last 5 weeks
 def plot_new_active_members_last_weeks(df_recent, weeks=5):
     """Plot the number of new active members in the last 'weeks' weeks"""
-    # Utiliser df_recent au lieu de df_filtered
+    # Utiliser df_recent au lieu de df
     df_recent['created_utc'] = pd.to_datetime(df_recent['created_utc'])
     df_recent['week'] = df_recent['created_utc'].dt.to_period('W')
     recent_weeks = df_recent['week'].unique()[-weeks:]
     
-    # Utiliser df_recent au lieu de df_filtered
+    # Utiliser df_recent au lieu de df
     new_active_counts = df_recent[df_recent['status'].isin(['active', 'canceled'])].groupby('week').size().reindex(recent_weeks, fill_value=0)
     
     new_trialing_counts = df_recent[df_recent['status'] == 'trialing'].groupby('week').size().reindex(recent_weeks, fill_value=0)
     
-    plt.figure(figsize=(12, 6))
     
     
     # Créer barres côte à côte
@@ -429,21 +436,21 @@ def plot_new_active_members_last_weeks(df_recent, weeks=5):
 
 print('\n')
 print(len(df_gifted[df_gifted['status']== 'active']), 'Active Gifted Members')
-print(len(df_filtered[df_filtered['status'] == 'active']), 'Active non-Gifted Members')
-print(len(df_filtered[df_filtered['status'] == 'trialing']), 'Currently Trialing Members')
+print(len(df[df['status'] == 'active']), 'Active non-Gifted Members')
+print(len(df[df['status'] == 'trialing']), 'Currently Trialing Members')
 
 # %%
 
 
 # LAST WEEK ANALYSIS
 
-def last_week_analysis(df_filtered):
+def last_week_analysis(df):
     """Analyze the last week of active members"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    last_week = df_filtered['created_utc'].max() - pd.Timedelta(days=7)
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    last_week = df['created_utc'].max() - pd.Timedelta(days=7)
     
     # Filter for the last week
-    df_last_week = df_filtered[df_filtered['created_utc'] >= last_week]
+    df_last_week = df[df['created_utc'] >= last_week]
     
     # Count new active members
     new_active_members = df_last_week[df_last_week['status'] == 'active'].shape[0]
@@ -459,19 +466,19 @@ def last_week_analysis(df_filtered):
     print(f"Cancel during Trial in the Last Week: {df_last_week[df_last_week['canceled_during_trial'] == True].shape[0]}")
     print(f"Cancel during Churn in the Last Week: {df_last_week[df_last_week['canceled_during_churn'] == True].shape[0]}")
 
-last_week_analysis(df_filtered) 
+last_week_analysis(df) 
 
 # %%
 
 # PREVIOUS WEEK ANALYSIS 
-def previous_week_analysis(df_filtered):
+def previous_week_analysis(df):
     """Analyze the previous week of active members"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    last_week = df_filtered['created_utc'].max() - pd.Timedelta(days=7)
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    last_week = df['created_utc'].max() - pd.Timedelta(days=7)
     previous_week = last_week - pd.Timedelta(days=7)
     
     # Filter for the previous week
-    df_previous_week = df_filtered[(df_filtered['created_utc'] >= previous_week) & (df_filtered['created_utc'] < last_week)]
+    df_previous_week = df[(df['created_utc'] >= previous_week) & (df['created_utc'] < last_week)]
     
     # Count new active members
     new_active_members = df_previous_week[df_previous_week['status'] == 'active'].shape[0]
@@ -487,7 +494,7 @@ def previous_week_analysis(df_filtered):
     print(f"Cancel during Trial in the Previous Week: {df_previous_week[df_previous_week['canceled_during_trial'] == True].shape[0]}")
     print(f"Cancel during Churn in the Previous Week: {df_previous_week[df_previous_week['canceled_during_churn'] == True].shape[0]}")
 
-previous_week_analysis(df_filtered)
+previous_week_analysis(df)
 
 
 # %%
@@ -495,13 +502,13 @@ previous_week_analysis(df_filtered)
 
 
 # LAST 6 MONTHS ANALYSIS (mean by weeks)
-def last_6_months_analysis(df_filtered):
+def last_6_months_analysis(df):
     """Analyze the last 6 months of active members"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    six_months_ago = df_filtered['created_utc'].max() - pd.Timedelta(days=180)
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    six_months_ago = df['created_utc'].max() - pd.Timedelta(days=180)
     
     # Filter for the last 6 months
-    df_last_6_months = df_filtered[df_filtered['created_utc'] >= six_months_ago]
+    df_last_6_months = df[df['created_utc'] >= six_months_ago]
     
     # Group by week and calculate mean
     df_last_6_months.loc[:, 'week'] = df_last_6_months['created_utc'].dt.tz_localize(None).dt.to_period('W')
@@ -518,7 +525,7 @@ def last_6_months_analysis(df_filtered):
     print(f"Mean Cancel during Trial per Week: {df_last_6_months[df_last_6_months['canceled_during_trial'] == True].groupby('week').size().mean():.2f}")
     print(f"Mean Cancel during Churn per Week: {df_last_6_months[df_last_6_months['canceled_during_churn'] == True].groupby('week').size().mean():.2f}")
 
-last_6_months_analysis(df_filtered)
+last_6_months_analysis(df)
 
 
 # %%
