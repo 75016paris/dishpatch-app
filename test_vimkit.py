@@ -541,20 +541,34 @@ def last_6_months_analysis(df):
 last_6_months_analysis(df)
 
 
-# %% [markdown]
+# %%
+print("""
+Subscription without trial
+--------------------------o
+1486 subscription without trial
 
-#Subscription without trial
 ##GIFTED
+--------
 866 subscription without trial
 58,7% of (all untrailed subscription) are gifted
 
 ##UN-GIFTED
+----------
+SWEET SPOT 13.5% 
 200 subscription without trial
-13.5% of (all untrailed subscription) are un-gifted
 
-16 sept 2024 > 97.7 Conversion rate 43%
-23 sept 2024 > 100 Conversion rate 54%
+16 sept 2024 > 97.7% Conversion rate -  43 subscriptions
+23 sept 2024 > 100% Conversion rate - 54 subscriptions
 
-11 sept 2024 > Massive subscription (300+) Conversion rate 41%
+MASS MARKET 20.3%
+300 subscription without trial
 
-# %% [markdown]
+11 sept 2024 > Conversion rate 41% - 85 subscriptions
+
+""")
+
+# %%
+
+
+
+
