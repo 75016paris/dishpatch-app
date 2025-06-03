@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import os
+from datetime import datetime
+
 
 # %%
 
@@ -29,8 +32,43 @@ sns.set_palette("viridis")
 # %%
 
 # LOADING CSV
-df_raw = pd.read_csv('~/Documents/_PRO/SIGFRID_DATA/DISHPATCH/data/data.csv')
 ##################
+#df_raw = pd.read_csv('~/Documents/_PRO/SIGFRID_DATA/DISHPATCH/data/data.csv')
+
+# Toggle this flag to True in production
+RENAME_FILES = False
+
+data_dir = 'data'
+
+# List and sort files by creation time
+files = [
+    os.path.join(data_dir, f)
+    for f in os.listdir(data_dir)
+    if os.path.isfile(os.path.join(data_dir, f)) and f.endswith('.csv')
+]
+
+sorted_files = sorted(files, key=os.path.getctime, reverse=True)
+
+# Loop over files
+for file_path in sorted_files:
+    created_at = datetime.fromtimestamp(os.path.getctime(file_path))
+    timestamp_str = created_at.strftime('%Y-%m-%d_%H-%M-%S')
+    original_name = os.path.basename(file_path)
+    new_name = f"{timestamp_str}_{original_name}"
+    new_path = os.path.join(data_dir, new_name)
+
+    if RENAME_FILES:
+        if not original_name.startswith(timestamp_str):
+            os.rename(file_path, new_path)
+            print(f"Renamed: {original_name} → {new_name}")
+            file_path = new_path
+        else:
+            print(f"Already renamed: {original_name}")
+    else:
+        print(f"[DEV] Would rename: {original_name} → {new_name}")
+
+
+
 
 # %%
 
