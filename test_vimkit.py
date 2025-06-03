@@ -85,6 +85,7 @@ df_raw = pd.read_csv(file_path)
 def preprocess_data(df):
     """Clean and preprocess the subscription data"""
     df = df_raw.copy()
+    print(f"Number of row in df before cleaning {len(df)}")
 
     # Date conversion
     date_cols = [col for col in df.columns if '(UTC)' in col]
@@ -129,9 +130,22 @@ def preprocess_data(df):
     reference_date = pd.Timestamp.now(tz='UTC')
     print(f"📅 Reference date (TODAY) : {reference_date.strftime('%d-%m-%Y')}")
 
+   
+    print(f"Number of row in df after cleaning {len(df)}")
+
+
+    # Set Canceled At (UTC) to Created (UTC) for past_due without cancellation date
+    past_due_no_cancel_date = (
+            df_raw['Canceled At (UTC)'].isna() & 
+            (df_raw['Status'] == 'past_due')
+            )
+
+    df_raw.loc[past_due_no_cancel_date, 'Canceled At (UTC)'] = df_raw.loc[past_due_no_cancel_date, 'Created (UTC)']
+
+
     # Consolidate status
     df.loc[df['status'].isin(['past_due', 'incomplete_expired']), 'status'] = 'canceled'
-
+  
     return df, reference_date
 
 df, reference_date = preprocess_data(df_raw)
@@ -527,4 +541,3 @@ def last_6_months_analysis(df):
 last_6_months_analysis(df)
 
 
-# %%
