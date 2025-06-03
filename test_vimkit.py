@@ -7,7 +7,6 @@ import seaborn as sns
 import os
 from datetime import datetime
 
-
 # %%
 
 # Setting up the plotting style
@@ -19,7 +18,7 @@ plt.rcParams['xtick.color'] = 'white'
 plt.rcParams['ytick.color'] = 'white'
 plt.rcParams['figure.figsize'] = (22, 11)
 
-# Grille avec opacité et en arrière-plan
+# Grid with opacity and in background
 plt.rcParams['axes.grid'] = True
 plt.rcParams['grid.color'] = 'lightgray'
 plt.rcParams['grid.alpha'] = 0.5
@@ -170,7 +169,7 @@ df =  clean_membership_data(df)
 # Filter out gifted members and analyze the data
 
 def gifted_members(df):
-    """Filter  gifted members from the DataFrame"""
+    """Filter gifted members from the DataFrame"""
     return df[df['is_gifted_member'] == True].drop(columns=['is_gifted_member'])
 
 df_gifted = gifted_members(df)
@@ -190,7 +189,7 @@ df = filter_gifted_members(df)
 # IN CHURN PERIOD
 def in_churn_period(df):
     """Check if a member is in the churn period (14 days after trial end)"""
-    # S'assurer que les colonnes sont en format datetime
+    # Ensure columns are in datetime format
     df['in_churn_period'] = (
         (df['trial_end_utc'] + pd.Timedelta(days=14) > pd.to_datetime(reference_date)) &
         (df['status'] == 'active')
@@ -204,7 +203,7 @@ df = in_churn_period(df)
 # CANCEL DURING TRIAL PERIOD
 def cancel_during_trial(df):
     """Check if a member canceled during their trial period"""
-    # S'assurer que les colonnes sont en format datetime
+    # Ensure columns are in datetime format
     df['canceled_during_trial'] = (
         (df['canceled_at_utc'].notna()) & 
         (df['trial_end_utc'] > df['canceled_at_utc']) 
@@ -214,11 +213,11 @@ def cancel_during_trial(df):
 df = cancel_during_trial(df) 
 
 
-# CANCEL DURRING CHURN PERIOD
-# if not canceled during trial, check if canceled  during churn period (14days after trial end)
+# CANCEL DURING CHURN PERIOD
+# if not canceled during trial, check if canceled during churn period (14days after trial end)
 def cancel_during_churn(df):
     """Check if a member canceled during their churn period (14 days after trial end)"""
-    # S'assurer que les colonnes sont en format datetime
+    # Ensure columns are in datetime format
     df['canceled_during_churn'] = (
         (df['canceled_during_trial'] == False) &
         (df['trial_end_utc'] + pd.Timedelta(days=14) > df['canceled_at_utc']) &
@@ -234,9 +233,9 @@ df = cancel_during_churn(df)
 
 
 
-# Plotting the cancelation rates with bar of pie chart
-def plot_cancelation_rates(df):
-    """Plot the cancelation rates with bar of pie chart showing percentages"""
+# Plotting the cancellation rates with bar of pie chart
+def plot_cancellation_rates(df):
+    """Plot the cancellation rates with bar of pie chart showing percentages"""
     trial_cancellations = df[df['canceled_during_trial'] == True]
     churn_cancellations = df[df['canceled_during_churn'] == True]
     other_canceled = df[
@@ -245,46 +244,46 @@ def plot_cancelation_rates(df):
         (df['canceled_during_churn'] == False)
     ] 
 
-    # Calculer les totaux
+    # Calculate totals
     total_cancellations = len(trial_cancellations) + len(churn_cancellations) + len(other_canceled)   
 
     # Active Members
     active_members = df[df['status'] == 'active']
     
     
-    # Données pour le camembert principal
+    # Data for main pie chart
     main_labels = ['Active Members',  'Canceled']
     main_sizes = [len(active_members), total_cancellations]
     main_colors = ['green', 'grey']
     
-    # Données pour le graphique en barres (détail des cancellations)
+    # Data for bar chart (cancellation details)
     detail_labels = ['Old Members', 'Trial Cancellations', 'Churn Cancellations']
     detail_sizes = [len(other_canceled), len(trial_cancellations), len(churn_cancellations)]
     detail_colors = ['grey', 'orange', 'red']
     
     
     
-    # Subplot 1: Camembert principal
+    # Subplot 1: Main pie chart
     ax1 = plt.subplot(1, 2, 1)
     wedges, texts, autotexts = ax1.pie(main_sizes, labels=main_labels, colors=main_colors,
                                        autopct='%1.1f%%', startangle=90, explode=(0.1, 0.1), 
                                        textprops={'color': 'white', 'fontsize': 12,
                                                   'fontweight': 'bold'})
     
-    # Améliorer l'apparence du texte du camembert
+    # Improve pie chart text appearance
     
     ax1.set_title('Overall Member Distribution', color='white', fontweight='bold', pad=20)
     
-    # Subplot 2: Graphique en barres pour le détail des cancellations
+    # Subplot 2: Bar chart for cancellation details
     ax2 = plt.subplot(1, 2, 2)
     
-    # Calculer les pourcentages par rapport au total
+    # Calculate percentages relative to total
     total = len(df)
     detail_percentages = [size/total*100 for size in detail_sizes]
     
     bars = ax2.bar(detail_labels, detail_sizes, color=detail_colors, alpha=0.8)
     
-    # Ajouter les valeurs et pourcentages sur les barres
+    # Add values and percentages on bars
     for bar, value, pct in zip(bars, detail_sizes, detail_percentages):
         height = bar.get_height()
         ax2.text(bar.get_x() + bar.get_width()/2., height + max(detail_sizes)*0.02, f'{value:,}\n({pct:.1f}%)', ha='center', va='bottom', color='white', fontweight='bold', fontsize=11)
@@ -293,19 +292,19 @@ def plot_cancelation_rates(df):
     ax2.set_ylabel('Number of Cancellations', color='white', fontweight='bold')
     ax2.set_facecolor('#282828')
     
-    # Améliorer l'apparence du graphique en barres
+    # Improve bar chart appearance
     ax2.tick_params(colors='white')
     for spine in ax2.spines.values():
         spine.set_color('white')
     
-    # Rotation des labels x pour une meilleure lisibilité
+    # Rotate x labels for better readability
     plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
     
     plt.tight_layout(pad=3.0)
     plt.subplots_adjust(wspace=0.6)
     plt.show()
     
-    # Afficher les statistiques détaillées avec pourcentages
+    # Display detailed statistics with percentages
     print(f"\n=== MEMBER STATUS BREAKDOWN ===")
     print(f"Total subscription : {total:,}")
     print(f"\n--- Main Distribution ---")
@@ -318,7 +317,7 @@ def plot_cancelation_rates(df):
     print(f"└─ Churn Cancellations: {len(churn_cancellations):,} ({len(churn_cancellations)/total*100:.1f}%)")
     print("\n")
 
-plot_cancelation_rates(df)
+plot_cancellation_rates(df)
 
 
 
@@ -402,19 +401,19 @@ df_recent = create_past_weeks_dataframe(df, weeks=5)
 # Bar plot new active members last 5 weeks
 def plot_new_active_members_last_weeks(df_recent, weeks=5):
     """Plot the number of new active members in the last 'weeks' weeks"""
-    # Utiliser df_recent au lieu de df
+    # Use df_recent instead of df
     df_recent['created_utc'] = pd.to_datetime(df_recent['created_utc'])
     df_recent['week'] = df_recent['created_utc'].dt.to_period('W')
     recent_weeks = df_recent['week'].unique()[-weeks:]
     
-    # Utiliser df_recent au lieu de df
+    # Use df_recent instead of df
     new_active_counts = df_recent[df_recent['status'].isin(['active', 'canceled'])].groupby('week').size().reindex(recent_weeks, fill_value=0)
     
     new_trialing_counts = df_recent[df_recent['status'] == 'trialing'].groupby('week').size().reindex(recent_weeks, fill_value=0)
     
     
     
-    # Créer barres côte à côte
+    # Create side-by-side bars
     x = np.arange(len(recent_weeks))
     width = 0.35
     
@@ -425,7 +424,7 @@ def plot_new_active_members_last_weeks(df_recent, weeks=5):
     plt.ylabel('Number of New Members')
     plt.xlabel('Week')
     
-    # Afficher les semaines sur l'axe X
+    # Display weeks on X axis
     plt.xticks(x, [str(week) for week in recent_weeks], rotation=45)
     plt.legend()
     plt.tight_layout()
@@ -529,4 +528,3 @@ last_6_months_analysis(df)
 
 
 # %%
-
