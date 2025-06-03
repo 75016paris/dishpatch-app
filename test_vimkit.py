@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Setting up the plotting style
 plt.rcParams.update({'font.size': 14, 'axes.labelsize': 14, 'axes.titlesize': 16})
-plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['axes.facecolor'] = 'darkgray'
 plt.rcParams['figure.facecolor'] = 'darkgray'
 plt.rcParams['axes.edgecolor'] = 'white'
 plt.rcParams['xtick.color'] = 'white'
@@ -68,7 +68,7 @@ for file_path in sorted_files:
         print(f"[DEV] Would rename: {original_name} → {new_name}")
 
 
-
+df_raw = pd.read_csv(file_path)
 
 # %%
 
@@ -77,7 +77,7 @@ for file_path in sorted_files:
 
 def preprocess_data(df):
     """Clean and preprocess the subscription data"""
-    df = df.copy()
+    df = df_raw.copy()
 
     # Date conversion
     date_cols = [col for col in df.columns if '(UTC)' in col]
