@@ -180,8 +180,11 @@ df =  clean_membership_data(df)
 # %%
 
 
-# Filter out gifted members and analyze the data
+# All Gifted Status
+df_all = df.copy()
 
+
+# Filter out gifted members and analyze the data
 def gifted_members(df):
     """Filter gifted members from the DataFrame"""
     return df[df['is_gifted_member'] == True].drop(columns=['is_gifted_member'])
@@ -206,11 +209,26 @@ def in_churn_period(df):
     # Ensure columns are in datetime format
     df['in_churn_period'] = (
         (df['trial_end_utc'] + pd.Timedelta(days=14) > pd.to_datetime(reference_date)) &
+        (df['status'] == 'active') |
+        (df['status'] == 'active') &
+        (df['current_period_end_utc'] + pd.Timedelta(days=14) > pd.to_datetime(reference_date))
+        )
+    return df
+
+df = in_churn_period(df)
+
+# %%
+
+# SUBSCRIPTION end soon
+def subscription_end_soon(df):
+    """Check if a member's subscription ends soon (within 14 days)"""
+    df['subscription_end_soon'] = (
+        (df['current_period_end_utc'] - reference_date < pd.Timedelta(days=14)) &
         (df['status'] == 'active')
     )
     return df
 
-df = in_churn_period(df)
+df_all = subscription_end_soon(df_all)
 
 # %%
 
@@ -542,29 +560,67 @@ last_6_months_analysis(df)
 
 
 # %%
+
+
+# CRITICAL TIMING
+# print all gifted members who's subscription is ending soon
+def critical_timing_gifted(df):
+    """Print all gifted members whose subscription is ending soon"""
+    df['current_period_end_utc'] = pd.to_datetime(df['current_period_end_utc'])
+    df_gifted_ending_soon = df[(df['is_gifted_member'] == True) & (df['subscription_end_soon'] == True)]
+    
+    if not df_gifted_ending_soon.empty:
+        print(f"\n{len(df_gifted_ending_soon)} Gifted Members with Subscription Ending Soon:")
+        for index, row in df_gifted_ending_soon.iterrows():
+            print(f"Name: {row['customer_name']}, Subscription End: {row['current_period_end_utc'].strftime('%d-%m-%Y')}")
+    else:
+        print("\nNo Gifted Members with Subscription Ending Soon.")
+
+# print all non-gifted members who's subscription is ending soon
+def critical_timing_non_gifted(df):
+    """Print all non-gifted members whose subscription is ending soon"""
+    df['current_period_end_utc'] = pd.to_datetime(df['current_period_end_utc'])
+    df_non_gifted_ending_soon = df[(df['is_gifted_member'] == False) & (df['subscription_end_soon'] == True)]
+    
+    if not df_non_gifted_ending_soon.empty:
+        print(f"\n{len(df_non_gifted_ending_soon)} Non-Gifted Members with Subscription Ending Soon:")
+        for index, row in df_non_gifted_ending_soon.iterrows():
+            print(f"Name: {row['customer_name']}, Subscription End: {row['current_period_end_utc'].strftime('%d-%m-%Y')}")
+    else:
+        print("\nNo Non-Gifted Members with Subscription Ending Soon.")
+
+
+
+critical_timing_gifted(df_all)
+critical_timing_non_gifted(df_all)
+
+# %%
+
+
 print("""
 Subscription without trial
---------------------------o
+--------------------------
 1486 subscription without trial
 
-##GIFTED
---------
+
+## GIFTED
+---------
 866 subscription without trial
 58,7% of (all untrailed subscription) are gifted
 
-##UN-GIFTED
-----------
-SWEET SPOT 13.5% 
-200 subscription without trial
 
+## UN-GIFTED
+------------
+SWEET SPOT - 13.5% 
+200 subscription without trial
 16 sept 2024 > 97.7% Conversion rate -  43 subscriptions
 23 sept 2024 > 100% Conversion rate - 54 subscriptions
 
-MASS MARKET 20.3%
+MASS MARKET - 20.3%
 300 subscription without trial
-
 11 sept 2024 > Conversion rate 41% - 85 subscriptions
 
+UNKNOWN REASON - 7,5% - 100 subscriptions
 """)
 
 # %%
