@@ -318,8 +318,7 @@ plot_cancelation_rates(df_filtered)
 
 def plot_active_members_over_time(df_filtered):
     """Plot the evolution of active members over time"""
-    df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    df_filtered['week'] = df_filtered['created_utc'].dt.to_period('W')
+    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
 
     active_counts = df_filtered[df_filtered['status'] == 'active'].groupby('week').size()
 
@@ -348,7 +347,7 @@ plot_active_members_over_time(df_filtered)
 def plot_cumulative_active_members_over_time(df_filtered):
     """Plot the evolution of active members over time"""
     df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    df_filtered['week'] = df_filtered['created_utc'].dt.to_period('W')
+    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
 
     active_counts = df_filtered[df_filtered['status'] == 'active'].groupby('week').size().cumsum()
 
@@ -377,7 +376,7 @@ plot_cumulative_active_members_over_time(df_filtered)
 def create_past_weeks_dataframe(df_filtered, weeks=5):
     """Create a DataFrame for the last 'weeks' weeks"""
     df_filtered['created_utc'] = pd.to_datetime(df_filtered['created_utc'])
-    df_filtered['week'] = df_filtered['created_utc'].dt.to_period('W')
+    df_filtered.loc[:, 'week'] = df_filtered['created_utc'].dt.tz_localize(None).dt.to_period('W')
     recent_weeks = df_filtered['week'].unique()[-weeks:]
     df_recent = df_filtered[df_filtered['week'].isin(recent_weeks)]
     return df_recent
@@ -503,7 +502,7 @@ def last_6_months_analysis(df_filtered):
     df_last_6_months = df_filtered[df_filtered['created_utc'] >= six_months_ago]
     
     # Group by week and calculate mean
-    df_last_6_months['week'] = df_last_6_months['created_utc'].dt.to_period('W')
+    df_last_6_months.loc[:, 'week'] = df_last_6_months['created_utc'].dt.tz_localize(None).dt.to_period('W')
     weekly_counts = df_last_6_months.groupby('week').size().reset_index(name='count')
     
     # Calculate mean per week
