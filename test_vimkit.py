@@ -11,23 +11,20 @@ from datetime import datetime
 # %%
 
 # Setting up the plotting style
-plt.rcParams.update({'font.size': 14, 'axes.labelsize': 14, 'axes.titlesize': 16})
-plt.rcParams['axes.facecolor'] = 'darkgray'
-plt.rcParams['figure.facecolor'] = 'darkgray'
+plt.rcParams.update({'font.size': 11, 'axes.labelsize': 10, 'axes.titlesize': 16})
+plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['figure.facecolor'] = 'white'
 plt.rcParams['axes.edgecolor'] = 'white'
 plt.rcParams['xtick.color'] = 'white'
 plt.rcParams['ytick.color'] = 'white'
-plt.rcParams['figure.figsize'] = (12, 6)
+plt.rcParams['figure.figsize'] = (22, 11)
 plt.rcParams['axes.grid'] = True
 plt.rcParams['grid.color'] = 'gray'
 plt.rcParams['axes.titleweight'] = 'bold'
 plt.rcParams['axes.titlecolor'] = 'white'
-#plt.rcParams['axes.labelweight'] = 'bold'
 plt.rcParams['axes.labelcolor'] = 'white'
-plt.rcParams['legend.fontsize'] = 'large'
 plt.rcParams['legend.title_fontsize'] = 'large'
 sns.set_palette("viridis")
-
 
 # %%
 
