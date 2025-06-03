@@ -38,6 +38,7 @@ RENAME_FILES = False
 data_dir = 'data'
 
 # List and sort files by creation time
+
 files = [
     os.path.join(data_dir, f)
     for f in os.listdir(data_dir)
@@ -48,6 +49,7 @@ sorted_files = sorted(files, key=os.path.getctime, reverse=True)
 
 # Loop over files
 for file_path in sorted_files:
+
     created_at = datetime.fromtimestamp(os.path.getctime(file_path))
     timestamp_str = created_at.strftime('%Y-%m-%d_%H-%M-%S')
     original_name = os.path.basename(file_path)
