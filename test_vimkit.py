@@ -28,9 +28,10 @@ plt.rcParams['axes.axisbelow'] = True
 plt.rcParams['axes.titleweight'] = 'bold'
 plt.rcParams['axes.titlecolor'] = 'white'
 plt.rcParams['axes.labelcolor'] = 'white'
-plt.rcParams['legend.title_fontsize'] = 'large'
-#clt.rcParams['legend.facecolor'] = 'darkgray'
-plt.rcParams['legend.edgecolor'] = 'white'
+#plt.rcParams['legend.title_fontsize'] = 'large'
+plt.rcParams['legend.labelcolor'] = 'black'
+plt.rcParams['legend.facecolor'] = 'white'
+plt.rcParams['legend.edgecolor'] = 'gray'
 plt.rcParams['text.color'] = 'white'
 sns.set_palette("viridis")
 
@@ -371,7 +372,6 @@ def plot_cumulative_active_members_over_time(df):
 
     plt.title('Total Active Members Over Time')
     plt.ylabel('Number of Active Members')
-    plt.legend()
     # add number of active members at the end of the plot
     plt.annotate(f'Active Members: {active_counts.iloc[-1]}', xy=(0.95, 0.47), xycoords='axes fraction', ha='right', va='top', fontsize=12, color='white',  bbox=dict(boxstyle='round,pad=0.3', edgecolor='black', facecolor='green'))
     plt.annotate(f'Total subscription : {subscription_counts.iloc[-1]}', xy=(0.90, 0.90), xycoords='axes fraction', ha='right', va='top', fontsize=12, color='white', bbox=dict(boxstyle='round,pad=0.3', edgecolor='black', facecolor='grey'))
