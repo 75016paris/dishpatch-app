@@ -98,7 +98,7 @@ def preprocess_data(input_df):
 
     # Column selection and renaming
     columns_to_keep = [
-        'Customer Name', 'Status', 'Cancellation Reason',
+        'Customer Name', 'Customer ID', 'Status', 'Cancellation Reason',
         'Created (UTC)', 'Start (UTC)', 'Current Period Start (UTC)', 
         'Current Period End (UTC)', 'Trial Start (UTC)', 'Trial End (UTC)',
         'Canceled At (UTC)', 'Ended At (UTC)', 'senderShopifyCustomerId (metadata)'
@@ -107,6 +107,7 @@ def preprocess_data(input_df):
     df = df[columns_to_keep]
 
     df.rename(columns={
+        'Customer ID': 'customer_id',
         'Customer Name': 'customer_name',
         'Status': 'status',
         'Cancellation Reason': 'cancellation_reason',
@@ -159,7 +160,7 @@ df = remove_high_volume_customers(df)
 
 # %%
 
-def clean_membership_data(df):
+def clean_customer_data(df):
     """Clean and prepare membership data for analysis"""
     # Remove very short subscriptions (likely test accounts)
     df['duration_days'] = (pd.to_datetime(df['ended_at_utc']) - pd.to_datetime(df['created_utc'])).dt.days
@@ -182,7 +183,7 @@ def clean_membership_data(df):
     print(f"📊 {len(df_clean)} subscriptions after cleaning")
     return df_clean.drop(['duration_days', 'time_diff'], axis=1)
 
-df =  clean_membership_data(df)
+df =  clean_customer_data(df)
 
 # %%
 
@@ -224,6 +225,9 @@ def calculate_duration(df):
             ((df['current_period_end_utc'] - reference_date).dt.days).where(df['status'] == 'active', np.nan)
 
     df['total_duration'] = (df['ended_at_utc'] - df['created_utc']).dt.days
+
+
+    df['void_duration'] = df['start_utc'] - df['created_utc']
 
     return df
 
@@ -269,10 +273,10 @@ df = cancel_during_trial(df)
 
 # CANCEL DURING CHURN PERIOD
 # if not canceled during trial, check if canceled during churn period (14days after trial end)
-def cancel_during_churn(df):
+def cancel_during_refund_period(df):
     """Check if a member canceled during their churn period (14 days after trial end)"""
     # Ensure columns are in datetime format
-    df['canceled_during_churn'] = (
+    df['canceled_during_refund_period'] = (
         (df['canceled_during_trial'] == False) &
         (df['canceled_at_utc'].notna()) & 
         (df['trial_end_utc'] + pd.Timedelta(days=14) > df['canceled_at_utc']) &
@@ -280,16 +284,23 @@ def cancel_during_churn(df):
     )
     return df
 
-df = cancel_during_churn(df)
+df = cancel_during_refund_period(df)
 
 # %%
+# Checking why some user have a created_utc < than start_utc, checking if they have multiple subscriptions.
 
-df_filtered = df[df['trial_only_subscription'] == False]
-df_filtered = df_filtered[['customer_name', 'status', 'created_utc',
-       'start_utc', 'current_period_start_utc', 'current_period_end_utc',
-       'trial_start_utc', 'trial_end_utc', 'canceled_at_utc', 'ended_at_utc',
-       'is_gifted_member', 'trial_duration', 'current_period_duration',
-       'trial_only_subscription', 'gift_duration', 'end_in', 'total_duration']]
-df_filtered[df_filtered['total_duration'].isin([0, 10])]
+df['void_duration'].describe()
 
+
+
+# %%
+# df_filtered = df[df['canceled_during_trial'] == False]
+# df_filtered = df_filtered[df_filtered['canceled_during_refund_period'] == False]
+# df_filtered = df_filtered[df_filtered['trial_only_subscription'] == False]
+# df_filtered = df_filtered[['customer_name', 'status', 'created_utc',
+#        'start_utc', 'current_period_start_utc', 'current_period_end_utc',
+#        'trial_start_utc', 'trial_end_utc', 'canceled_at_utc', 'ended_at_utc',
+#        'is_gifted_member', 'trial_duration', 'current_period_duration',
+#        'trial_only_subscription', 'gift_duration', 'end_in', 'total_duration']]
+# df_filtered['total_duration'].value_counts(bins=7).sort_index().plot(kind='bar', color='purple', edgecolor='black')  
 
