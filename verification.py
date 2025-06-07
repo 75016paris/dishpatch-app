@@ -1,6 +1,5 @@
 # %%
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -138,6 +137,23 @@ df = preprocess_data(df_raw)
 
 # %%
 
+# Adding end date for subscriptions that are canceled but have no ended_at_utc date.
+def add_ended_at_for_canceled(df):
+    """Set ended_at_utc to current_period_end_utc for canceled subscriptions without ended_at_utc"""
+    
+    # Ensure ended_at_utc is set to current_period_end_utc for canceled subscriptions
+    mask = (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna()) & (df['status'] == 'canceled')
+    
+    df.loc[mask, 'ended_at_utc'] = df['current_period_end_utc']
+    
+    return df
+
+
+df = add_ended_at_for_canceled(df)
+
+
+# %%
+
 # Removing customers with more than 7 subscriptions (Probably testing accounts)
 def remove_high_volume_customers(df, threshold=7):
     """Remove customers with more than a specified number of subscriptions"""
@@ -157,104 +173,182 @@ def remove_high_volume_customers(df, threshold=7):
 
 
 df = remove_high_volume_customers(df)
+df_original = df.copy()  # Keep original for later analysis
+
+
+# Si canceled_at < trial_end → annulation pendant trial
+# Si trial_end < canceled_at < trial_end + 14 jours → annulation pendant refund
+# %%
+
+# def clean_customer_data(df):
+#     """
+#     Clean and prepare membership data for analysis
+#     Removes very short subscriptions and keeps most recent subscription for duplicates
+#     """
+#     original_count = len(df)
+#
+#     # Calculate duration_days handling active subscriptions
+#     df['ended_or_now'] = df['ended_at_utc'].fillna(reference_date)
+#     df['duration_days'] = (df['ended_or_now'] - df['created_utc']).dt.days
+#
+#     # Remove very short durations for non-active subscriptions (~15 minutes)
+#     df_clean = df[~((df['duration_days'] < 0.01) & (df['status'] != 'active'))]
+#
+#     # Remove duplicates: keep most recent subscription for same customer within 2 hours
+#     df_clean = df_clean.sort_values(['customer_name', 'created_utc'])
+#     df_clean['time_diff'] = df_clean.groupby('customer_name')['created_utc'].diff()
+#
+#     # Remove earlier subscriptions (keep most recent)
+#     df_clean = df_clean[~((df_clean['time_diff'] < pd.Timedelta(hours=2)) & (df_clean['time_diff'].notna()))]
+#
+#     removed_count = original_count - len(df_clean)
+#     print(f"📊 {original_count} → {len(df_clean)} subscriptions after cleaning")
+#     print(f"🧹 Removed {removed_count} subscriptions ({removed_count/original_count*100:.1f}%)")
+#
+#     return df_clean.drop(['duration_days', 'time_diff', 'ended_or_now'], axis=1)
+#
+# df = clean_customer_data(df)
+#
+def clean_customer_data_preserve_business_stats(df):
+    """
+    Clean subscription data while preserving business statistics
+    
+    Rules:
+    1. KEEP ALL subscriptions with 'active' status (regardless of duration)
+    2. Remove technical duplicates (< 15 minutes between subscriptions from same customer)
+    3. Ensure only one active subscription per customer (keep most recent)
+    
+    Returns:
+        DataFrame: Cleaned data without biasing conversion stats
+        list: Customers with multiple active subscriptions
+    """
+    original_count = len(df)
+    print(f"Rows before cleaning: {original_count}")
+    
+    # ===== STEP 1: Remove technical duplicates (< 15 min) =====
+    df_clean = df.sort_values(['customer_name', 'created_utc'])
+    df_clean['next_time'] = df_clean.groupby('customer_name')['created_utc'].shift(-1)
+    df_clean['time_to_next'] = df_clean['next_time'] - df_clean['created_utc']
+    
+    # Mark old duplicates (< 15 minutes) but NEVER remove active subscriptions
+    is_technical_duplicate = (df_clean['time_to_next'] < pd.Timedelta(minutes=15)) & df_clean['time_to_next'].notna()
+    duplicate_non_active = is_technical_duplicate & (df_clean['status'] != 'active')
+    
+    # Remove ONLY non-active duplicates
+    df_clean = df_clean[~duplicate_non_active]
+    
+    # ===== STEP 2: Ensure one active subscription per customer =====
+    # Find customers with multiple active subscriptions
+    active_df = df_clean[df_clean['status'] == 'active']
+    customer_active_counts = active_df['customer_name'].value_counts()
+    multi_active_customers = customer_active_counts[customer_active_counts > 1].index.tolist()
+    
+    if len(multi_active_customers) > 0:
+        def keep_most_recent_active_only(group):
+            active_subs = group[group['status'] == 'active']
+            non_active_subs = group[group['status'] != 'active']
+            
+            if len(active_subs) <= 1:
+                return group
+            
+            # Keep most recent active subscription
+            most_recent_active_idx = active_subs['created_utc'].idxmax()
+            most_recent_active = active_subs.loc[[most_recent_active_idx]]
+            
+            # Combine non-active + most recent active
+            result = pd.concat([non_active_subs, most_recent_active])
+            return result.sort_values('created_utc')
+        
+        df_clean = df_clean.groupby('customer_name').apply(keep_most_recent_active_only).reset_index(drop=True)
+    
+    # Clean temporary columns
+    columns_to_drop = ['next_time', 'time_to_next']
+    columns_to_drop = [col for col in columns_to_drop if col in df_clean.columns]
+    df_clean = df_clean.drop(columns_to_drop, axis=1)
+    
+    final_count = len(df_clean)
+    print(f"Rows after cleaning: {final_count}")
+    print(f"Customers with multiple active subscriptions: {len(multi_active_customers)}")
+    
+    return df_clean, multi_active_customers
+
+
+df, multi_active_customers = clean_customer_data_preserve_business_stats(df)
+
 
 # %%
 
-def clean_customer_data(df):
-    """Clean and prepare membership data for analysis"""
-    # Remove very short subscriptions (likely test accounts)
-    df['duration_days'] = (pd.to_datetime(df['ended_at_utc']) - pd.to_datetime(df['created_utc'])).dt.days
-
-    # Keep accounts that are either:
-        # 1. Longer than 1 day, OR
-    # 2. Still active/trialing (even if recent)
-    df_clean = df[~((df['duration_days'] < 1) & ~(df['status'].isin(['active', 'trialing'])))]
-
-    # Remove duplicate signups (within 12 hours)
-    df_clean = df_clean.sort_values(['customer_name', 'created_utc'], ascending=[True, False])
-    df_clean['time_diff'] = df_clean.groupby('customer_name')['created_utc'].diff()
-
-    # Remove duplicates but keep the most recent (due to descending sort)
-    df_clean = df_clean[~((df_clean['time_diff'] < pd.Timedelta(hours=12)) & (df_clean['time_diff'].notna()))]
-    df_clean = df_clean.sort_values('created_utc', ascending=True)
-
-
-    print(f"📊 {len(df)} subscriptions before cleaning")
-    print(f"📊 {len(df_clean)} subscriptions after cleaning")
-    return df_clean.drop(['duration_days', 'time_diff'], axis=1)
-
-df =  clean_customer_data(df)
-
-# %%
-
-# Adding end date for subscriptions that are canceled but have no ended_at_utc date.
-def add_ended_at_for_canceled(df):
-    """Set ended_at_utc to current_period_end_utc for canceled subscriptions without ended_at_utc"""
-    
-    # Ensure ended_at_utc is set to current_period_end_utc for canceled subscriptions
-    mask = (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna())
-    
-    df.loc[mask, 'ended_at_utc'] = df['current_period_end_utc']
-    
-    return df
-
-
-df = add_ended_at_for_canceled(df)
-
-# %%
-
-# CALCULATING DURATIONS
+# # CALCULATING DURATIONS
 def calculate_duration(df):
-    """Calculate various duration in days"""
+    """Calculate various durations in days with proper business logic"""
     
-    df['trial_duration'] = \
-            (df['trial_end_utc'] - df['trial_start_utc']).dt.days.fillna(0)
+    # Trial duration (if trial exists)
+    df['trial_duration'] = (df['trial_end_utc'] - df['trial_start_utc']).dt.days.fillna(0)
     
-    df['current_period_duration'] = \
-            (df['current_period_end_utc'] - df['current_period_start_utc']).dt.days
+    # Current period duration
+    df['current_period_duration'] = (df['current_period_end_utc'] - df['current_period_start_utc']).dt.days
     
+    # Trial-only subscription
     df['trial_only_subscription'] = (
         df['trial_start_utc'].notna() & 
         df['trial_end_utc'].notna() & 
         (df['trial_duration'] == df['current_period_duration'])
     )
-
+    
+    # Gift duration (only for gifted members)
     df['gift_duration'] = df['current_period_duration'].where(df['is_gifted_member'], 0)
+    
+    # Days until end for active subscriptions
+    df['end_in'] = ((df['current_period_end_utc'] - reference_date).dt.days).where(df['status'] == 'active', np.nan)
+    
+    # For active subscriptions: from created_utc to current_period_end_utc (projected)
+    # For ended subscriptions: from created_utc to ended_at_utc (actual)
+    df['expected_duration'] = np.where(
+        df['status'] == 'active',
+        (df['current_period_end_utc'] - df['created_utc']).dt.days,  # Active: projected duration
+        (df['ended_at_utc'] - df['created_utc']).dt.days             # Ended: actual duration
+    )
 
-    df['end_in'] = \
-            ((df['current_period_end_utc'] - reference_date).dt.days).where(df['status'] == 'active', np.nan)
-
-    df['total_duration'] = (df['ended_at_utc'] - df['created_utc']).dt.days
-
-
-    df['void_duration'] = df['start_utc'] - df['created_utc']
-
+    df['real_duration'] = np.where(
+            df['ended_at_utc'].notna(),
+            (df['ended_at_utc'] - df['created_utc']).dt.days,  # Ended: actual duration
+            (reference_date - df['created_utc']).dt.days  # Active: duration until now
+    )
+    
+    
+    # Void duration (time between creation and start - should be minimal)
+    df['void_duration'] = (df['start_utc'] - df['created_utc']).dt.days
+    
+   
     return df
-
 
 df = calculate_duration(df)
 
+
 # %%
 
-# IN CHURN PERIOD
-def in_churn_period(df):
-    """Check if a member is in the churn period (14 days after trial end or subscription end)"""
-    df['in_churn_period'] = (
-        (df['status'] == 'active') & 
-        (
-            # Recently ended trial (within last 14 days)
-            ((df['trial_end_utc'].notna()) & 
-             (df['trial_end_utc'] <= reference_date) & 
-             (df['trial_end_utc'] + pd.Timedelta(days=14) >= reference_date)) |
-            # Current period recently ended (within last 14 days) 
-            ((df['current_period_end_utc'].notna()) &
-             (df['current_period_end_utc'] <= reference_date) & 
-             (df['current_period_end_utc'] + pd.Timedelta(days=14) >= reference_date))
-        )
-    )
-    return df
+# IN REFUND PERIOD
 
-df = in_churn_period(df)
+def in_refund_period(df):
+   """Check if a member is in the refund period (14 days after trial end or subscription start)"""
+   df['in_refund_period'] = (
+       (df['status'] == 'active') & 
+       (
+           # Post-trial refund: 14 days after trial ends
+           ((df['trial_end_utc'].notna()) & 
+            (df['trial_only_subscription'] == False) &
+            (df['trial_end_utc'] <= reference_date) & 
+            (df['trial_end_utc'] + pd.Timedelta(days=14) >= reference_date)) |
+           # Post-renewal refund: 14 days after period starts 
+           ((df['current_period_start_utc'].notna()) &
+            (df['current_period_start_utc'] <= reference_date) & 
+            (df['current_period_start_utc'] + pd.Timedelta(days=14) >= reference_date))
+       )
+   )
+   return df
+
+df = in_refund_period(df)
+
 
 # %%
 
@@ -271,36 +365,72 @@ def cancel_during_trial(df):
 df = cancel_during_trial(df) 
 
 
-# CANCEL DURING CHURN PERIOD
-# if not canceled during trial, check if canceled during churn period (14days after trial end)
+# CANCEL DURING REFUND PERIOD
+# if not canceled during trial, check if canceled during refund period (14days after trial end)
 def cancel_during_refund_period(df):
-    """Check if a member canceled during their churn period (14 days after trial end)"""
-    # Ensure columns are in datetime format
+    """Check if canceled during refund period (14 days after trial end OR subscription start)"""
+    
+    # For subscriptions with trials: 14 days after trial end
+    trial_refund_condition = (
+        (df['trial_end_utc'].notna()) &
+        (df['canceled_at_utc'] > df['trial_end_utc']) &
+        (df['canceled_at_utc'] <= df['trial_end_utc'] + pd.Timedelta(days=14))
+    )
+    
+    # For subscriptions without trials: 14 days after start
+    no_trial_refund_condition = (
+        (df['trial_end_utc'].isna()) &
+        (df['start_utc'].notna()) &
+        (df['canceled_at_utc'] <= df['start_utc'] + pd.Timedelta(days=14))
+    )
+    
     df['canceled_during_refund_period'] = (
         (df['canceled_during_trial'] == False) &
         (df['canceled_at_utc'].notna()) & 
-        (df['trial_end_utc'] + pd.Timedelta(days=14) > df['canceled_at_utc']) &
-        (df['trial_end_utc'].notna())
+        (trial_refund_condition | no_trial_refund_condition)
     )
     return df
 
+
 df = cancel_during_refund_period(df)
+df_multi = df.copy()
+print(df.info())
 
 # %%
-# Checking why some user have a created_utc < than start_utc, checking if they have multiple subscriptions.
 
-df['void_duration'].describe()
+# GROUPBY CUSTOMER NAME
+def groupby_customer_name(df):
+    """Group by customer name and aggregate relevant metrics"""
+    
+    df = df.groupby('customer_name').agg({
+        'customer_id': 'first',
+        'status': 'max',
+        'created_utc': 'min',
+        'start_utc': 'min',
+        'current_period_start_utc': 'min',
+        'current_period_end_utc': 'max',
+        'trial_start_utc': 'min',
+        'trial_end_utc': 'max',
+        'canceled_at_utc': 'max',
+        'ended_at_utc': 'max',
+        'is_gifted_member': 'any',
+        'canceled_during_trial': 'any',
+        'canceled_during_refund_period': 'any',
+        'trial_duration': 'sum',
+        'current_period_duration': 'sum',
+        'total_duration': 'sum',
+        'void_duration': 'sum'
+    }).reset_index()
+    
+    
+    return df
+
+df = groupby_customer_name(df)
 
 
 
-# %%
-# df_filtered = df[df['canceled_during_trial'] == False]
-# df_filtered = df_filtered[df_filtered['canceled_during_refund_period'] == False]
-# df_filtered = df_filtered[df_filtered['trial_only_subscription'] == False]
-# df_filtered = df_filtered[['customer_name', 'status', 'created_utc',
-#        'start_utc', 'current_period_start_utc', 'current_period_end_utc',
-#        'trial_start_utc', 'trial_end_utc', 'canceled_at_utc', 'ended_at_utc',
-#        'is_gifted_member', 'trial_duration', 'current_period_duration',
-#        'trial_only_subscription', 'gift_duration', 'end_in', 'total_duration']]
-# df_filtered['total_duration'].value_counts(bins=7).sort_index().plot(kind='bar', color='purple', edgecolor='black')  
+df
+
+df['status'].value_counts()
+df_multi['status'].value_counts()
 
