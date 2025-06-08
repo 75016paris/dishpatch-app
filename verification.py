@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from pandas.tseries.offsets import Day
 import seaborn as sns
 import os
 from datetime import datetime
@@ -11,10 +12,12 @@ from datetime import datetime
 
 # Setting up the plotting style
 plt.rcParams.update({'font.size': 11, 'axes.labelsize': 10, 'axes.titlesize': 16})
+plt.rcParams['figure.facecolor'] = 'white'
 plt.rcParams['axes.facecolor'] = 'white'
-plt.rcParams['figure.facecolor'] = 'black'
-plt.rcParams['axes.edgecolor'] = 'white'
+plt.rcParams['axes.edgecolor'] = 'black'
+#plt.rcParams['xtick.color'] = 'black'
 plt.rcParams['xtick.color'] = 'white'
+#plt.rcParams['ytick.color'] = 'black'
 plt.rcParams['ytick.color'] = 'white'
 plt.rcParams['figure.figsize'] = (22, 11)
 
@@ -25,13 +28,13 @@ plt.rcParams['grid.alpha'] = 0.5
 plt.rcParams['axes.axisbelow'] = True
 
 plt.rcParams['axes.titleweight'] = 'bold'
+#plt.rcParams['axes.titlecolor'] = 'black'
 plt.rcParams['axes.titlecolor'] = 'white'
-plt.rcParams['axes.labelcolor'] = 'white'
-#plt.rcParams['legend.title_fontsize'] = 'large'
+plt.rcParams['axes.labelcolor'] = 'black'
 plt.rcParams['legend.labelcolor'] = 'black'
 plt.rcParams['legend.facecolor'] = 'white'
 plt.rcParams['legend.edgecolor'] = 'gray'
-plt.rcParams['text.color'] = 'white'
+plt.rcParams['text.color'] = 'black'
 sns.set_palette("viridis")
 
 # %%
@@ -124,6 +127,9 @@ def preprocess_data(input_df):
     # Convert is_gifted_member to boolean
     df['is_gifted_member'] = df['is_gifted_member'].notna() 
 
+    # Concert past_due and incomplete_expired to canceled
+    df['status'] = df['status'].replace({'past_due': 'canceled', 'incomplete_expired': 'canceled'})
+
     # Reference date for analysis
     print('--------------------------------------')
     print(f"📅 Reference date (TODAY) : {reference_date.strftime('%d-%m-%Y')}")
@@ -137,19 +143,89 @@ df = preprocess_data(df_raw)
 
 # %%
 
-# Adding end date for subscriptions that are canceled but have no ended_at_utc date.
+# # Adding end date for subscriptions that are canceled but have no ended_at_utc date.
+# def add_ended_at_for_canceled(df):
+#     """Set ended_at_utc to current_period_end_utc for canceled subscriptions without ended_at_utc"""
+#
+#     # Ensure ended_at_utc is set to current_period_end_utc for canceled subscriptions
+#     mask = (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna()) & (df['status'] == 'canceled') 
+#
+#     df.loc[mask, 'ended_at_utc'] = df['current_period_end_utc']
+#
+#
+#     mask2 = (df['ended_at_utc'].isna()) & (df['trial_end_utc'].notna()) & ((df['status'] == 'canceled'))
+#
+#     df.loc[mask2, 'ended_at_utc'] = df['trial_end_utc']
+#
+#
+#     mask3 = (df['ended_at_utc'].isna()) & (df['trial_end_utc'].isna()) & ((df['status'] == 'canceled'))
+#
+#     df.loc[mask3, 'ended_at_utc'] = df['current_period_start_utc']
+#
+#
+#     return df
+#
+#
+# df = add_ended_at_for_canceled(df)
+
 def add_ended_at_for_canceled(df):
-    """Set ended_at_utc to current_period_end_utc for canceled subscriptions without ended_at_utc"""
-    
-    # Ensure ended_at_utc is set to current_period_end_utc for canceled subscriptions
-    mask = (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna()) & (df['status'] == 'canceled')
-    
-    df.loc[mask, 'ended_at_utc'] = df['current_period_end_utc']
-    
+
+    cancel_mask = (df['status'] == 'canceled') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna()) 
+    active_mask = (df['status'] == 'active') & (df['ended_at_utc'].isna() ) & (df['canceled_at_utc'].notna())
+    past_due_mask = (df['status'] == 'canceled') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].isna())
+
+    mask1 = cancel_mask & \
+        (df['trial_end_utc'].notna()) & \
+        (df['canceled_at_utc'] <= df['trial_end_utc'])
+    # If canceled before trial end, set ended_at_utc to trial_end_utc
+    df.loc[mask1, 'ended_at_utc'] = df['trial_end_utc']
+
+    mask2 = cancel_mask  & \
+        (df['trial_end_utc'].notna()) & \
+        (df['canceled_at_utc'] > df['trial_end_utc']) & \
+        (df['canceled_at_utc'] <= df['trial_end_utc'] + pd.Timedelta(days=14))
+    # If canceled after trial end but within 14 days, set ended_at_utc to canceled_at_utc
+    df.loc[mask2, 'ended_at_utc'] = df['canceled_at_utc']
+
+
+    mask3 = cancel_mask & \
+        (df['trial_end_utc'].notna()) & \
+        (df['canceled_at_utc'] > df['trial_end_utc'] + pd.Timedelta(days=14))
+    # If canceled after trial end and more than 14 days, set ended_at_utc to current_period_end_utc
+    df.loc[mask3, 'ended_at_utc'] = df['current_period_end_utc']
+
+    mask4 = cancel_mask  & \
+        (df['trial_end_utc'].isna()) 
+    # If canceled with no trial end, set ended_at_utc to current_period_start_utc
+    df.loc[mask4, 'ended_at_utc'] = df['current_period_start_utc'] 
+
+    mask5 = active_mask
+    # If active subscription with no ended_at_utc, set ended_at_utc to current_period_end_utc
+    df.loc[mask5, 'ended_at_utc'] = df['current_period_end_utc']
+
+    mask6 = active_mask & \
+        (df['trial_end_utc'].notna()) & \
+        (df['canceled_at_utc'] >= df['trial_end_utc'] + pd.Timedelta(days=14))
+    # If active and canceled after trial end + 14 days, set ended_at_utc to current_period_end_utc
+    df.loc[mask6, 'ended_at_utc'] = df['canceled_at_utc']
+
+    mask7 = (df['status'] == 'trialing') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna())
+    # If trialing and canceled, set ended_at_utc to trial_end_utc
+    df.loc[mask7, 'ended_at_utc'] = df['trial_end_utc']
+
+    df.loc[past_due_mask, 'ended_at_utc'] = df['current_period_start_utc']
+    df.loc[past_due_mask, 'canceled_at_utc'] = df['current_period_start_utc']
+
+
     return df
 
-
 df = add_ended_at_for_canceled(df)
+
+print('***************************************************')
+print(f'{df.info()}')
+print('***************************************************')
+trouble_df = df[df['canceled_at_utc'].notna() & df['ended_at_utc'].isna()]
+print(trouble_df['status'].value_counts())
 
 
 # %%
@@ -273,7 +349,7 @@ def clean_customer_data_preserve_business_stats(df):
     return df_clean, multi_active_customers
 
 
-df, multi_active_customers = clean_customer_data_preserve_business_stats(df)
+# df, multi_active_customers = clean_customer_data_preserve_business_stats(df)
 
 
 # %%
@@ -373,6 +449,7 @@ def cancel_during_refund_period(df):
     # For subscriptions with trials: 14 days after trial end
     trial_refund_condition = (
         (df['trial_end_utc'].notna()) &
+        (df['canceled_at_utc'].notna()) &
         (df['canceled_at_utc'] > df['trial_end_utc']) &
         (df['canceled_at_utc'] <= df['trial_end_utc'] + pd.Timedelta(days=14))
     )
@@ -380,21 +457,26 @@ def cancel_during_refund_period(df):
     # For subscriptions without trials: 14 days after start
     no_trial_refund_condition = (
         (df['trial_end_utc'].isna()) &
+        (df['canceled_at_utc'].notna()) &
         (df['start_utc'].notna()) &
-        (df['canceled_at_utc'] <= df['start_utc'] + pd.Timedelta(days=14))
+        (df['canceled_at_utc'] <= df['current_period_start_utc'] + pd.Timedelta(days=14))
     )
     
     df['canceled_during_refund_period'] = (
-        (df['canceled_during_trial'] == False) &
+        (~df['canceled_during_trial']) &
         (df['canceled_at_utc'].notna()) & 
         (trial_refund_condition | no_trial_refund_condition)
     )
+
     return df
 
 
 df = cancel_during_refund_period(df)
+
+# %%
+
+# MULTI SUBSCRIPTION ANALYSIS
 df_multi = df.copy()
-print(df.info())
 
 # %%
 
@@ -402,7 +484,7 @@ print(df.info())
 def groupby_customer_name(df):
     """Group by customer name and aggregate relevant metrics"""
     
-    df = df.groupby('customer_name').agg({
+    df_grouped = df.groupby('customer_name').agg({
         'customer_id': 'first',
         'status': 'max',
         'created_utc': 'min',
@@ -418,19 +500,259 @@ def groupby_customer_name(df):
         'canceled_during_refund_period': 'any',
         'trial_duration': 'sum',
         'current_period_duration': 'sum',
-        'total_duration': 'sum',
+        'real_duration': 'sum',
+        'expected_duration': 'sum',
         'void_duration': 'sum'
     }).reset_index()
     
+    # Logique pour full_member : pas d'abandon précoce
+    df_grouped['full_member'] = (
+        ~df_grouped['canceled_during_trial'] & 
+        ~df_grouped['canceled_during_refund_period']
+    )
     
-    return df
+    # Clients qui ont upgradé depuis un gift
+    df_grouped['upgraded_from_gift'] = (
+        df_grouped['is_gifted_member'] &  # A eu au moins un gift
+        df_grouped['full_member']         # ET est devenu full member
+    )
+    
+    return df_grouped
 
 df = groupby_customer_name(df)
 
+# %%
+
+print(f'\nGROUPED BY CUSTOMER NAME STATUS - {len(df)}')
+print(df['status'].value_counts())
+
+print(f'\nALL SUBSCRIPTIONS STATUS - {len(df_multi)}')
+print(df_multi['status'].value_counts())
+
+# %%
 
 
-df
+# SUBSCRIPTION TIMELINE
+events = []
+for _, row in df.iterrows():  # Fixed syntax
+    # Creation (+1 total, +1 historically active)
+    events.append({
+        'date': row['created_utc'].date(),
+        'total_change': +1,
+        'historical_active_change': +1,
+        'still_active_change': 0  # Will calculate differently
+    })
+    
+    # Subscription end (-1 historically active)
+    if pd.notna(row['ended_at_utc']):
+        events.append({
+            'date': row['ended_at_utc'].date(),
+            'total_change': 0,
+            'historical_active_change': -1,
+            'still_active_change': 0
+        })
 
-df['status'].value_counts()
-df_multi['status'].value_counts()
+events_df = pd.DataFrame(events)
+events_df = events_df.sort_values('date')
 
+# Group by date
+daily_changes = events_df.groupby('date').sum()
+
+# Complete timeline
+date_range = pd.date_range(
+    start=daily_changes.index.min(),
+    end=pd.Timestamp.now().date(),
+    freq='D'
+)
+
+daily_changes = daily_changes.reindex(date_range, fill_value=0)
+
+# Calculate cumulative values
+total_cumulative = daily_changes['total_change'].cumsum()
+historical_active_cumulative = daily_changes['historical_active_change'].cumsum()
+
+# For "Still Active Today": count only those currently active
+still_active_events = []
+for _, row in df[df['status'] == 'active'].iterrows():
+    still_active_events.append({
+        'date': row['created_utc'].date(),
+        'change': +1
+    })
+
+still_active_df = pd.DataFrame(still_active_events)
+if not still_active_df.empty:
+    still_active_daily = still_active_df.groupby('date')['change'].sum()
+    still_active_daily = still_active_daily.reindex(date_range, fill_value=0)
+    still_active_cumulative = still_active_daily.cumsum()
+else:
+    still_active_cumulative = pd.Series(0, index=date_range)
+
+# Final plot
+plt.figure(figsize=(14, 8))
+plt.plot(total_cumulative.index, total_cumulative.values, 
+         label='Total Subscriptions', color='gray', alpha=0.5)
+plt.plot(historical_active_cumulative.index, historical_active_cumulative.values, 
+         label='Historically Active', color='black')
+
+# Get final values - CORRECTED
+final_total = total_cumulative.iloc[-1]
+current_historical = historical_active_cumulative.iloc[-1]  # Current value
+peak_historical = historical_active_cumulative.max()       # Peak value
+still_active_today = still_active_cumulative.iloc[-1]      # Current value, not max
+
+plt.title('Subscription Timeline')
+plt.xlabel('Date')
+plt.ylabel('Number of Subscriptions')
+plt.xticks(rotation=45)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# Corrected prints
+print(f"Total Subscriptions: {final_total:,.0f}")
+print(f"Historical Peak ({historical_active_cumulative.idxmax().date()}): {peak_historical:,.0f}")
+print(f"Active Today: {still_active_today:,.0f}")
+
+
+
+# SUBSCRIPTION TIMELINE WITH FULL MEMBERS
+events = []
+
+# Pour tous les abonnements (Total et Historically Active)
+for _, row in df.iterrows():
+    # Creation (+1 total, +1 historically active)
+    events.append({
+        'date': row['created_utc'].date(),
+        'total_change': +1,
+        'historical_active_change': +1,
+        'full_member_change': 0  # Sera calculé séparément
+    })
+    
+    # Subscription end (-1 historically active)
+    if pd.notna(row['ended_at_utc']):
+        events.append({
+            'date': row['ended_at_utc'].date(),
+            'total_change': 0,
+            'historical_active_change': -1,
+            'full_member_change': 0
+        })
+
+# Pour les full members uniquement
+full_members = df[df['full_member'] == True]
+print(f"Total customers: {len(df)}")
+print(f"Full members: {len(full_members)} ({len(full_members)/len(df)*100:.1f}%)")
+
+for _, row in full_members.iterrows():
+    # Creation (+1 full member)
+    events.append({
+        'date': row['created_utc'].date(),
+        'total_change': 0,
+        'historical_active_change': 0,
+        'full_member_change': +1
+    })
+    
+    # Subscription end (-1 full member)
+    if pd.notna(row['ended_at_utc']):
+        events.append({
+            'date': row['ended_at_utc'].date(),
+            'total_change': 0,
+            'historical_active_change': 0,
+            'full_member_change': -1
+        })
+
+events_df = pd.DataFrame(events)
+events_df = events_df.sort_values('date')
+
+# Group by date
+daily_changes = events_df.groupby('date').sum()
+
+# Complete timeline
+date_range = pd.date_range(
+    start=daily_changes.index.min(),
+    end=pd.Timestamp.now().date(),
+    freq='D'
+)
+
+daily_changes = daily_changes.reindex(date_range, fill_value=0)
+
+# Calculate cumulative values
+total_cumulative = daily_changes['total_change'].cumsum()
+historical_active_cumulative = daily_changes['historical_active_change'].cumsum()
+full_member_cumulative = daily_changes['full_member_change'].cumsum()
+
+# For "Still Active Today": count only those currently active
+still_active_events = []
+for _, row in df[df['status'] == 'active'].iterrows():
+    still_active_events.append({
+        'date': row['created_utc'].date(),
+        'change': +1
+    })
+
+still_active_df = pd.DataFrame(still_active_events)
+if not still_active_df.empty:
+    still_active_daily = still_active_df.groupby('date')['change'].sum()
+    still_active_daily = still_active_daily.reindex(date_range, fill_value=0)
+    still_active_cumulative = still_active_daily.cumsum()
+else:
+    still_active_cumulative = pd.Series(0, index=date_range)
+
+# For "Full Members Still Active Today"
+full_active_events = []
+for _, row in full_members[full_members['status'] == 'active'].iterrows():
+    full_active_events.append({
+        'date': row['created_utc'].date(),
+        'change': +1
+    })
+
+full_active_df = pd.DataFrame(full_active_events)
+if not full_active_df.empty:
+    full_active_daily = full_active_df.groupby('date')['change'].sum()
+    full_active_daily = full_active_daily.reindex(date_range, fill_value=0)
+    full_active_cumulative = full_active_daily.cumsum()
+else:
+    full_active_cumulative = pd.Series(0, index=date_range)
+
+# Final plot
+plt.figure(figsize=(14, 8))
+plt.plot(total_cumulative.index, total_cumulative.values, 
+         label='Total Subscriptions', color='gray', alpha=0.5, linewidth=2)
+plt.plot(historical_active_cumulative.index, historical_active_cumulative.values, 
+         label='Historically Active', color='black', linewidth=2)
+plt.plot(full_member_cumulative.index, full_member_cumulative.values, 
+         label='Full Members', color='blue', linewidth=2)
+plt.plot(full_active_cumulative.index, full_active_cumulative.values, 
+         label='Full Members (Active Today)', color='green', linewidth=2)
+
+# Get final values
+final_total = total_cumulative.iloc[-1]
+current_historical = historical_active_cumulative.iloc[-1]
+peak_historical = historical_active_cumulative.max()
+still_active_today = still_active_cumulative.iloc[-1]
+current_full_members = full_member_cumulative.iloc[-1]
+peak_full_members = full_member_cumulative.max()
+full_active_today = full_active_cumulative.iloc[-1]
+
+plt.title('Subscription Timeline - with Full Members')
+plt.xlabel('Date')
+plt.ylabel('Number of Subscriptions')
+plt.xticks(rotation=45)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# Statistics
+print(f"\n=== METRICS ===")
+print(f"Total Subscriptions: {final_total:,.0f}")
+print(f"Historical Peak ({historical_active_cumulative.idxmax().date()}): {peak_historical:,.0f}")
+print(f"Currently Historical: {current_historical:,.0f}")
+print(f"Active Today: {still_active_today:,.0f}")
+print(f"\n=== FULL MEMBERS ===")
+print(f"Full Members Peak ({full_member_cumulative.idxmax().date()}): {peak_full_members:,.0f}")
+print(f"Currently Full Members: {current_full_members:,.0f}")
+print(f"Full Members Active Today: {full_active_today:,.0f}")
+print(f"\n=== QUALITY METRICS ===")
+print(f"Full Member Rate: {(current_full_members/final_total)*100:.1f}%")
+print(f"Full Member Retention: {(full_active_today/current_full_members)*100:.1f}%")
+print(f"Overall Retention: {(still_active_today/final_total)*100:.1f}%")
