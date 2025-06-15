@@ -270,11 +270,6 @@ def add_ended_at_for_canceled(df):
 
 df = add_ended_at_for_canceled(df)
 
-print('***************************************************')
-print(f'{df.info()}')
-print('***************************************************')
-trouble_df = df[df['canceled_at_utc'].notna() & df['ended_at_utc'].isna()]
-print(trouble_df['status'].value_counts())
 
 
 # %%

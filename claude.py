@@ -1,4 +1,4 @@
-# %# %%
+# %%
 ######################################################################################
 import numpy as np
 import matplotlib.pyplot as plt
@@ -243,15 +243,16 @@ def merge_dataframes(df1, df2):
 
     return merged_df
 
-df = merge_dataframes(df1, df2)
-
+#df = merge_dataframes(df1, df2)
+df = df1 
 
 # %%
 ######################################################################################
 # Removing customers with more than 5 subscriptions (Probably testing accounts)
 def remove_high_volume_customers(df, threshold=HIGH_VOLUME_THRESHOLD):
     """Remove customers with more than a specified number of subscriptions"""
-    
+    df = df.copy()
+
     original_count = len(df)
 
     customer_counts = df['customer_id'].value_counts()
@@ -274,7 +275,8 @@ df = remove_high_volume_customers(df)
 # CANCEL DURING TRIAL PERIOD
 def cancel_during_trial(df):
     """Check if a member canceled during their trial period"""
-    # Ensure columns are in datetime format
+    df =df.copy()
+
     df['canceled_during_trial'] = (
         (df['canceled_at_utc'].notna()) & 
         (df['trial_end_utc'] > df['canceled_at_utc']) 
@@ -288,6 +290,8 @@ df = cancel_during_trial(df)
 ######################################################################################
 # SETTING REFUND PERIOD END UTC
 def refund_period_end_utc(df, REFUND_PERIOD_DAYS):
+    df = df.copy()
+
     df['refund_period_end_utc'] = np.where(
         df['trial_end_utc'].notna(), df['trial_end_utc'] + pd.Timedelta(days=REFUND_PERIOD_DAYS),
         df['current_period_start_utc'] + pd.Timedelta(days=REFUND_PERIOD_DAYS))
@@ -302,7 +306,8 @@ df = refund_period_end_utc(df, REFUND_PERIOD_DAYS)
 # CANCEL DURRING REFUND PERIOD
 def canceled_during_refund_period(df):
     """Check if a member canceled during their refund period"""
-    # Ensure columns are in datetime format
+    df = df.copy()
+
     df['canceled_during_refund_period'] = (
         (df['canceled_during_trial'] == False) &
         (df['canceled_at_utc'].notna()) & 
@@ -318,6 +323,8 @@ df = canceled_during_refund_period(df)
 # FULL MEMBER STATUS
 def full_member_status(df):
     """Determine if a customer is a full member based on business logic"""
+    df = df.copy()
+
     # Full member if:
     # 1. Not canceled during trial
     # 2. Not canceled during refund period
@@ -350,6 +357,8 @@ df = full_member_status(df)
 # PAYINF MEMBERS
 def paying_members(df):
     """Determine if a customer is a paying member"""
+    df = df.copy()
+
     # Paying member if:
     # 1. Not canceled
     # 2. Not gifted
@@ -370,6 +379,55 @@ def paying_members(df):
     return df
 
 df = paying_members(df)
+
+
+# %%
+######################################################################################
+# CALCULATING DURATIONS
+def calculate_duration(df):
+    """Calculate various durations in days with proper business logic"""
+    
+    # Trial duration (if trial exists)
+    df['trial_duration'] = (df['trial_end_utc'] - df['trial_start_utc']).dt.days.fillna(0)
+    
+    # Current period duration
+    df['current_period_duration'] = (df['current_period_end_utc'] - df['current_period_start_utc']).dt.days
+    
+    # Trial-only subscription
+    df['trial_only_subscription'] = (
+        df['trial_start_utc'].notna() & 
+        df['trial_end_utc'].notna() & 
+        (df['trial_duration'] == df['current_period_duration'])
+    )
+    
+    # Gift duration (only for gifted members)
+    df['gift_duration'] = df['current_period_duration'].where(df['is_gifted_member'], 0)
+    
+    # Days until end for active subscriptions
+    df['end_in'] = ((df['current_period_end_utc'] - today_date).dt.days).where(df['status'] == 'active', np.nan)
+    
+    # For active subscriptions: from created_utc to current_period_end_utc (projected)
+    # For ended subscriptions: from created_utc to ended_at_utc (actual)
+    df['expected_duration'] = np.where(
+        (df['ended_at_utc'].isna()),
+        (df['current_period_end_utc'] - df['created_utc']).dt.days,  # Active: projected duration
+        (df['ended_at_utc'] - df['created_utc']).dt.days             # Ended: actual duration
+    )
+
+    df['real_duration'] = np.where(
+            df['ended_at_utc'].notna(),
+            (df['ended_at_utc'] - df['created_utc']).dt.days,  # Ended: actual duration
+            (today_date - df['created_utc']).dt.days  # Active: duration until now
+    )
+    
+    
+    # Void duration (time between creation and start - should be minimal)
+    df['void_duration'] = (df['start_utc'] - df['created_utc']).dt.days
+    
+   
+    return df
+
+df = calculate_duration(df)
 
 
 # %%
@@ -402,6 +460,9 @@ def get_specific_past_week(weeks_back=1, reference_date=None):
     week_start = target_monday.normalize()  # 00:00:00
     week_end = target_sunday.normalize() + pd.Timedelta(hours=23, minutes=59, seconds=59)  # 23:59:59
     
+    monday = target_monday.strftime('%d-%m-%y')
+    sunday = target_sunday.strftime('%d-%m-%y')
+
     # Las week info
     week_info = {
         'weeks_ago': weeks_back,
@@ -410,8 +471,100 @@ def get_specific_past_week(weeks_back=1, reference_date=None):
         'year': target_monday.year,
         'week_number': target_monday.isocalendar().week,
         'year_week': f"{target_monday.year}-W{target_monday.isocalendar().week:02d}",
+        'monday': monday,
+        'sunday': sunday,
     }
     
     return week_info
 
+# %%
+####################################################################################
+# Plot nuber
+#
+# new_trial_this_week = 110
+# last_week_trial = 100
+# last_6M_trial = 90
+# last_year_trial = 124
+# new_renewal_this_week = 45
+# churn_this_week = 12
+# week_info = get_specific_past_week(weeks_back=1, reference_date=today_date)
+#
+#
+#
+# df['week'] = df['created_utc'].dt.to_period('W').apply(lambda r: r.start_time)
+# new_trials_per_week = df.groupby('week').size().reset_index(name='new_trials')
+#
+#
+#
+#
+#
+# fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(22, 11))
+# fig.suptitle(f"Weekly Subscription Metrics\n from Monday {week_info['monday']} to Sunday {week_info['sunday']}") 
+#
+# ax1.set_title('New Trial this week')
+# ax1.text(0.5, 0.8, new_trial_this_week, fontsize=16, fontweight='bold', ha='center', va='center', color='grey')
+#
+# if last_week_trial > new_trial_this_week:
+#     ax1.text(0.5, 0.5, f'Last week: {last_week_trial} (-{last_week_trial - new_trial_this_week}) {(((new_trial_this_week - last_week_trial) / last_week_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='red')
+# else:
+#     ax1.text(0.5, 0.5, f'Last week: {last_week_trial} ({last_week_trial - new_trial_this_week}) +{(((new_trial_this_week - last_week_trial) / last_week_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='green')
+#
+# if last_6M_trial > new_trial_this_week:
+#     ax1.text(0.5, 0.3, f'mean Last 6 months: {last_6M_trial} (-{last_6M_trial - new_trial_this_week}) {(((new_trial_this_week - last_6M_trial) / last_6M_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='red')
+# else:
+#     ax1.text(0.5, 0.3, f'mean Last 6 months: {last_6M_trial} ({last_6M_trial - new_trial_this_week}) +{(((new_trial_this_week - last_6M_trial) / last_6M_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='green')
+#
+# if last_year_trial > new_trial_this_week:
+#     ax1.text(0.5, 0.1, f'mean Last year: {last_year_trial} (-{last_year_trial - new_trial_this_week}) {(((new_trial_this_week - last_year_trial) / last_year_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='red')
+# else:
+#     ax1.text(0.5, 0.1, f'mean Last year: {last_year_trial} ({last_year_trial - new_trial_this_week}) +{(((new_trial_this_week - last_year_trial) / last_year_trial) *100):.1f}%', fontsize=12, ha='center', va='center', color='green')
+#
+#
+#
+# ax1.set_xticklabels([])
+# ax1.set_yticklabels([])
+# ax1.set_xticks([])
+# ax1.set_yticks([])
+#
+# ax2.set_title('New Renewal this week')
+# ax2.text(0.5, 0.5, new_renewal_this_week, fontsize=16, fontweight='bold', ha='center', va='center', color='blue')
+# sns.barplot(x='week', y='new_trials', data=new_trials_per_week, color='purple')
+# ax2.set_xticklabels([])
+# ax2.set_yticklabels([])
+# ax2.set_xticks([])
+# ax2.set_yticks([])
+#
+# ax3.set_title('Churn this week')
+# ax3.text(0.5, 0.5, churn_this_week, fontsize=16, fontweight='bold', ha='center', va='center', color='red')
+# ax3.set_xticklabels([])
+# ax3.set_yticklabels([])
+# ax3.set_xticks([])
+# ax3.set_yticks([])
+#
+#
+# # save figure with week_metric_YYYY-MM-DD.png
+# fig.savefig(os.path.join(analysis_dir, f"week_metric_{week_info['year']}-{week_info['week_number']:02d}.png"), bbox_inches='tight', dpi=300)
+#
+# plt.show()
 
+
+# %% 
+# si les duration < que 40 ce sont des essais 
+######################################################################################
+def get_full_members_count(df):
+    """Count the number of full members"""
+
+    df = df.copy()
+    df = df[df['is_full_member'] == True]
+    df = df[df['status'] == 'active']
+
+    active = len(df)
+    print(f"Total Active full member: {active}")
+
+    dict_full_members = {'active': active
+                         }
+
+    return dict_full_members
+
+
+dict_full_member = get_full_members_count(df)

@@ -15,10 +15,10 @@ plt.rcParams.update({'font.size': 11, 'axes.labelsize': 10, 'axes.titlesize': 16
 plt.rcParams['figure.facecolor'] = 'white'
 plt.rcParams['axes.facecolor'] = 'white'
 plt.rcParams['axes.edgecolor'] = 'black'
-#plt.rcParams['xtick.color'] = 'black'
-plt.rcParams['xtick.color'] = 'white'
-#plt.rcParams['ytick.color'] = 'black'
-plt.rcParams['ytick.color'] = 'white'
+plt.rcParams['xtick.color'] = 'black'
+#plt.rcParams['xtick.color'] = 'white'
+plt.rcParams['ytick.color'] = 'black'
+#plt.rcParams['ytick.color'] = 'white'
 plt.rcParams['figure.figsize'] = (22, 11)
 
 # Grid with opacity and in background
@@ -28,8 +28,8 @@ plt.rcParams['grid.alpha'] = 0.5
 plt.rcParams['axes.axisbelow'] = True
 
 plt.rcParams['axes.titleweight'] = 'bold'
-#plt.rcParams['axes.titlecolor'] = 'black'
-plt.rcParams['axes.titlecolor'] = 'white'
+plt.rcParams['axes.titlecolor'] = 'black'
+#plt.rcParams['axes.titlecolor'] = 'white'
 plt.rcParams['axes.labelcolor'] = 'black'
 plt.rcParams['legend.labelcolor'] = 'black'
 plt.rcParams['legend.facecolor'] = 'white'
@@ -44,6 +44,7 @@ sns.set_palette("viridis")
 # Set TODAY DATE
 # today_date = pd.Timestamp.now(tz='UTC')
 today_date = pd.Timestamp('2025-05-23', tz='UTC')  # For testing purposes
+start_date = pd.Timestamp('2023-09-25 09:04:00+0000', tz='UTC')
 
 # Set REFUND PERDIOD DURATION
 REFUND_PERIOD_DAYS = 14  # Duration of the refund period in days
@@ -116,18 +117,19 @@ def preprocess_data(input_df):
     df = df[columns_to_keep]
 
     df.rename(columns={
+        'id': 'subscription_id',
         'Customer ID': 'customer_id',
         'Customer Name': 'customer_name',
         'Status': 'status',
         'Cancellation Reason': 'cancellation_reason',
-        'Created (UTC)': 'created_utc',
+        'Created (UTC)': 'created',
         'Start (UTC)': 'start_utc',
         'Current Period Start (UTC)': 'current_period_start_utc',
         'Current Period End (UTC)': 'current_period_end_utc',
-        'Trial Start (UTC)': 'trial_start_utc',
-        'Trial End (UTC)': 'trial_end_utc',
-        'Canceled At (UTC)': 'canceled_at_utc',
-        'Ended At (UTC)': 'ended_at_utc',
+        'Trial Start (UTC)': 'trial_start',
+        'Trial End (UTC)': 'trial_end',
+        'Canceled At (UTC)': 'canceled_at',
+        'Ended At (UTC)': 'ended_at',
         'senderShopifyCustomerId (metadata)': 'is_gifted_member'
     }, inplace=True)
 
@@ -149,1836 +151,995 @@ def preprocess_data(input_df):
 df = preprocess_data(df_raw)
 #####################################################################################################
 # %%
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
 
-def investigate_gift_cancellations(df):
+def fast_weekly_analysis_from_csv(df, today_date, export_csv=True):
     """
-    Analyse les patterns de cancellation des gifts
+    OPTIMIZED: Fast weekly analysis without expensive timeline reconstruction
+    Uses vectorized operations instead of loops
     """
-    gifts = df[df['is_gifted_member'] == True].copy()
-    
-    print(f"=== ANALYSE DES {len(gifts)} GIFTS ===")
-    
-    # 1. Timing de cancellation
-    gifts['time_to_cancel'] = (gifts['canceled_at_utc'] - gifts['created_utc']).dt.total_seconds()
-    
-    print("\n📊 TIMING DE CANCELLATION:")
-    print(f"Cancelés immédiatement (0 sec): {(gifts['time_to_cancel'] == 0).sum()}")
-    print(f"Cancelés < 1 min: {(gifts['time_to_cancel'] < 60).sum()}")
-    print(f"Cancelés < 1 heure: {(gifts['time_to_cancel'] < 3600).sum()}")
-    print(f"Jamais cancelés: {gifts['canceled_at_utc'].isna().sum()}")
-    
-    # 2. Status des gifts
-    print(f"\n📈 STATUS ACTUEL:")
-    print(gifts['status'].value_counts())
-    
-    # 3. Raisons de cancellation
-    print(f"\n❌ RAISONS DE CANCELLATION:")
-    print(gifts['cancellation_reason'].value_counts())
-    
-    # 4. Relation avec les périodes
-    gifts['same_as_created'] = gifts['canceled_at_utc'] == gifts['created_utc']
-    gifts['same_as_period_end'] = gifts['canceled_at_utc'] == gifts['current_period_end_utc']
-    
-    print(f"\n🕐 PATTERNS TEMPORELS:")
-    print(f"Canceled = Created: {gifts['same_as_created'].sum()}")
-    print(f"Canceled = Period End: {gifts['same_as_period_end'].sum()}")
-    
-    # 5. Échantillon détaillé
-    print(f"\n🔍 ÉCHANTILLON (5 premiers gifts):")
-    sample_cols = ['customer_name', 'status', 'created_utc', 'canceled_at_utc', 
-                   'current_period_end_utc', 'time_to_cancel', 'cancellation_reason']
-    print(gifts[sample_cols].head())
-    
-    return gifts
-
-# Utilisez comme ça :
-gift_analysis = investigate_gift_cancellations(df)  
-
-
-
-# %%
-######################################################################################################
-
-def refund_period_end_utc(df, REFUND_PERIOD_DAYS):
-    df['refund_period_end_utc'] = np.where(
-        df['trial_end_utc'].notna(), df['trial_end_utc'] + pd.Timedelta(days=REFUND_PERIOD_DAYS),
-        df['current_period_start_utc'] + pd.Timedelta(days=REFUND_PERIOD_DAYS))
-
-    return df
-
-df = refund_period_end_utc(df, REFUND_PERIOD_DAYS)
-
-# %%
-
-def add_ended_at_for_canceled(df):
-
-    cancel_mask = (df['status'] == 'canceled') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna()) 
-    
-    mask1 = cancel_mask & \
-        (df['trial_end_utc'].notna()) & \
-        (df['canceled_at_utc'] <= df['trial_end_utc'])
-    df.loc[mask1, 'ended_at_utc'] = df['trial_end_utc']
-
-    mask2 = cancel_mask  & \
-        (df['trial_end_utc'].notna()) & \
-        (df['canceled_at_utc'] > df['trial_end_utc']) & \
-        (df['canceled_at_utc'] <= df['trial_end_utc'] + pd.Timedelta(days=14))
-    df.loc[mask2, 'ended_at_utc'] = df['canceled_at_utc']
-
-    mask3 = cancel_mask & \
-        (df['trial_end_utc'].notna()) & \
-        (df['canceled_at_utc'] > df['trial_end_utc'] + pd.Timedelta(days=14))
-    df.loc[mask3, 'ended_at_utc'] = df['current_period_end_utc']
-
-    mask4 = cancel_mask  & \
-        (df['trial_end_utc'].isna()) & \
-        (df['canceled_at_utc'] > df['refund_period_end_utc'])
-    # If canceled with no trial end, set ended_at_utc to current_period_start_utc
-    df.loc[mask4, 'ended_at_utc'] = df['current_period_end_utc'] 
-
-    mask4b = cancel_mask & \
-        (df['trial_end_utc'].isna()) & \
-        (df['canceled_at_utc'] <= df['refund_period_end_utc'])
-    # If canceled with no trial end, set ended_at_utc to canceled_at_utc
-    df.loc[mask4b, 'ended_at_utc'] = df['canceled_at_utc']
-
-
-    active_mask = (df['status'] == 'active') & (df['ended_at_utc'].isna() ) & (df['canceled_at_utc'].notna())
-
-    mask5 = active_mask & \
-            (df['canceled_at_utc'] > df['refund_period_end_utc']) 
-    df.loc[mask5, 'ended_at_utc'] = df['current_period_end_utc']
-
-
-    mask6 = active_mask & \
-            (df['canceled_at_utc'] < df['refund_period_end_utc']) 
-    df.loc[mask6, 'ended_at_utc'] = df['canceled_at_utc']   
-
-
-    mask7 = (df['status'] == 'trialing') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].notna())
-    # If trialing and canceled, set ended_at_utc to trial_end_utc
-    df.loc[mask7, 'ended_at_utc'] = df['trial_end_utc']
-
-
-    past_due_mask = (df['status'] == 'canceled') & (df['ended_at_utc'].isna()) & (df['canceled_at_utc'].isna())
-
-    df.loc[past_due_mask, 'ended_at_utc'] = df['current_period_start_utc']
-    df.loc[past_due_mask, 'canceled_at_utc'] = df['current_period_start_utc']
-
-
-    return df
-
-df = add_ended_at_for_canceled(df)
-
-print('***************************************************')
-print(f'{df.info()}')
-print('***************************************************')
-trouble_df = df[df['canceled_at_utc'].notna() & df['ended_at_utc'].isna()]
-print(trouble_df['status'].value_counts())
-
-
-# %%
-
-# Removing customers with more than 7 subscriptions (Probably testing accounts)
-def remove_high_volume_customers(df, threshold=HIGH_VOLUME_THRESHOLD):
-    """Remove customers with more than a specified number of subscriptions"""
-    
-    original_count = len(df)
-
-    customer_counts = df['customer_id'].value_counts()
-    high_volume_customers = customer_counts[customer_counts > threshold].index
-    
-    df = df[~df['customer_id'].isin(high_volume_customers)]
-    
-    print(f'{original_count - len(df)} subscriptions removed,')
-    print(f'from {len(high_volume_customers)} customers with more than {threshold} subscriptions')
-    print('--------------------------------------')
-
-    return df
-
-
-df = remove_high_volume_customers(df)
-df_original = df.copy()  # Keep original for later analysis
-
-
-# %%
-
-#
-def clean_customer_data_preserve_business_stats(df, DUPLICATE_THRESHOLD_MINUTES):
-    """
-    Clean subscription data while preserving business statistics
-    
-    Rules:
-    1. KEEP ALL subscriptions with 'active' status (regardless of duration)
-    2. Remove technical duplicates (< 15 minutes between subscriptions from same customer)
-    3. Ensure only one active subscription per customer (keep most recent)
-    
-    Returns:
-        DataFrame: Cleaned data without biasing conversion stats
-        list: Customers with multiple active subscriptions
-    """
-    original_count = len(df)
-    print(f"Rows before cleaning: {original_count}")
-    
-    # ===== STEP 1: Remove technical duplicates (< 15 min) =====
-    df_clean = df.sort_values(['customer_id', 'created_utc'])
-    df_clean['next_time'] = df_clean.groupby('customer_id')['created_utc'].shift(-1)
-    df_clean['time_to_next'] = df_clean['next_time'] - df_clean['created_utc']
-    
-    # Mark old duplicates (< 15 minutes) but NEVER remove active subscriptions
-    is_technical_duplicate = (df_clean['time_to_next'] < pd.Timedelta(minutes=DUPLICATE_THRESHOLD_MINUTES)) & df_clean['time_to_next'].notna()
-    duplicate_non_active = is_technical_duplicate & (df_clean['status'] != 'active')
-    
-    # Remove ONLY non-active duplicates
-    df_clean = df_clean[~duplicate_non_active]
-    
-    # ===== STEP 2: Ensure one active subscription per customer =====
-    # Find customers with multiple active subscriptions
-    active_df = df_clean[df_clean['status'] == 'active']
-    customer_active_counts = active_df['customer_id'].value_counts()
-    multi_active_customers = customer_active_counts[customer_active_counts > 1].index.tolist()
-    
-    if len(multi_active_customers) > 0:
-        def keep_most_recent_active_only(group):
-            active_subs = group[group['status'] == 'active']
-            non_active_subs = group[group['status'] != 'active']
-            
-            if len(active_subs) <= 1:
-                return group
-            
-            # Keep most recent active subscription
-            most_recent_active_idx = active_subs['created_utc'].idxmax()
-            most_recent_active = active_subs.loc[[most_recent_active_idx]]
-            
-            # Combine non-active + most recent active
-            result = pd.concat([non_active_subs, most_recent_active])
-            return result.sort_values('created_utc')
-        
-        df_clean = df_clean.groupby('customer_id').apply(keep_most_recent_active_only).reset_index(drop=True)
-    
-    # Clean temporary columns
-    columns_to_drop = ['next_time', 'time_to_next']
-    columns_to_drop = [col for col in columns_to_drop if col in df_clean.columns]
-    df_clean = df_clean.drop(columns_to_drop, axis=1)
-    
-    final_count = len(df_clean)
-    print(f"Rows after cleaning: {final_count}")
-    print(f"Customers with multiple active subscriptions: {len(multi_active_customers)}")
-    
-    return df_clean, multi_active_customers
-
-
-# df, multi_active_customers = clean_customer_data_preserve_business_stats(df)
-
-
-# %%
-
-# # CALCULATING DURATIONS
-def calculate_duration(df):
-    """Calculate various durations in days with proper business logic"""
-    
-    # Trial duration (if trial exists)
-    df['trial_duration'] = (df['trial_end_utc'] - df['trial_start_utc']).dt.days.fillna(0)
-    
-    # Current period duration
-    df['current_period_duration'] = (df['current_period_end_utc'] - df['current_period_start_utc']).dt.days
-    
-    # Trial-only subscription
-    df['trial_only_subscription'] = (
-        df['trial_start_utc'].notna() & 
-        df['trial_end_utc'].notna() & 
-        (df['trial_duration'] == df['current_period_duration'])
-    )
-    
-    # Gift duration (only for gifted members)
-    df['gift_duration'] = df['current_period_duration'].where(df['is_gifted_member'], 0)
-    
-    # Days until end for active subscriptions
-    df['end_in'] = ((df['current_period_end_utc'] - today_date).dt.days).where(df['status'] == 'active', np.nan)
-    
-    # For active subscriptions: from created_utc to current_period_end_utc (projected)
-    # For ended subscriptions: from created_utc to ended_at_utc (actual)
-    df['expected_duration'] = np.where(
-        (df['ended_at_utc'].isna()),
-        (df['current_period_end_utc'] - df['created_utc']).dt.days,  # Active: projected duration
-        (df['ended_at_utc'] - df['created_utc']).dt.days             # Ended: actual duration
-    )
-
-    df['real_duration'] = np.where(
-            df['ended_at_utc'].notna(),
-            (df['ended_at_utc'] - df['created_utc']).dt.days,  # Ended: actual duration
-            (today_date - df['created_utc']).dt.days  # Active: duration until now
-    )
-    
-    
-    # Void duration (time between creation and start - should be minimal)
-    df['void_duration'] = (df['start_utc'] - df['created_utc']).dt.days
-    
-   
-    return df
-
-df = calculate_duration(df)
-
-
-# %%
-
-# IN REFUND PERIOD
-
-def in_refund_period(df):
-   """Check if a member is in the refund period (14 days after trial end or subscription start)"""
-   df['in_refund_period'] = (
-       (df['status'] == 'active') & 
-       (
-           # Post-trial refund: 14 days after trial ends
-           ((df['trial_end_utc'].notna()) & 
-            (df['trial_only_subscription'] == False) &
-            (df['trial_end_utc'] <= today_date) & 
-            (df['trial_end_utc'] + pd.Timedelta(days=14) >= today_date)) |
-           # Post-renewal refund: 14 days after period starts 
-           ((df['current_period_start_utc'].notna()) &
-            (df['current_period_start_utc'] <= today_date) & 
-            (df['current_period_start_utc'] + pd.Timedelta(days=14) >= today_date))
-       ))
-   return df
-
-df = in_refund_period(df)
-
-
-# %%
-
-# CANCEL DURING TRIAL PERIOD
-def cancel_during_trial(df):
-    """Check if a member canceled during their trial period"""
-    # Ensure columns are in datetime format
-    df['canceled_during_trial'] = (
-        (df['canceled_at_utc'].notna()) & 
-        (df['trial_end_utc'] > df['canceled_at_utc']) 
-    )
-    return df
-
-df = cancel_during_trial(df) 
-
-
-# CANCEL DURING REFUND PERIOD
-# if not canceled during trial, check if canceled during refund period (14days after trial end)
-def cancel_during_refund_period(df):
-    """Check if canceled during refund period (14 days after trial end OR subscription start)"""
-    
-    # For subscriptions with trials: 14 days after trial end
-    df['canceled_during_refund_period'] = (
-        (~df['canceled_during_trial']) &
-        (df['canceled_at_utc'].notna()) & 
-        (df['refund_period_end_utc'] >= df['canceled_at_utc'])
-    )
-
-    return df
-
-
-df = cancel_during_refund_period(df)
-
-# %%
-
-# FULL MEMBER STATUS
-def full_member_status(df):
-    """Determine if a customer is a full member based on business logic"""
-    
-    # Full member if:
-    # 1. Not canceled during trial
-    # 2. Not canceled during refund period
-    # 3. Not gifted
-    # 4. Trial ended more than 14 days ago (if no trial, current_period_start_utc > 14 days ago)
-    
-    no_early_cancellation = (
-        (~df['canceled_during_trial']) & 
-        (~df['canceled_during_refund_period'])
-    )
-
-    not_gifted = (~df['is_gifted_member'])
-
-    refund_period_passed = (today_date > df['refund_period_end_utc'])
-
-
-    df['full_member'] = (
-        no_early_cancellation & 
-        not_gifted & 
-        refund_period_passed
-    )
-    
-    return df
-
-df = full_member_status(df)
-
-
-# %%
-
-# GROUPBY CUSTOMER ID
-def groupby_customer_id(df):
-    """Group by customer name with proper business logic - English version"""
-    
-    # Sort by created_utc to have chronological order
-    df_sorted = df.sort_values(['customer_id', 'created_utc'])
-    
-    def get_most_recent_value(series):
-        """Get value from most recent subscription"""
-        return series.iloc[-1]
-    
-   
-    # Main aggregation
-    customer_df = df_sorted.groupby('customer_id').agg({
-        'customer_name': 'first',
-        'created_utc': 'min',                    # First subscription
-        'start_utc': 'min',                      # First start
-        'canceled_at_utc': 'max',                # Last cancellation
-        'ended_at_utc': 'max',                   # Last end
-        'trial_duration': 'sum',                 # Total trial time
-        'current_period_duration': 'sum',        # Total period time
-        'real_duration': 'sum',                  # Total real duration
-        'expected_duration': 'sum',              # Total expected duration
-        'void_duration': 'sum'                   # Total void time
-    }).reset_index()
-    
-    # Add values from the most recent subscription
-    latest_subscription_data = df_sorted.groupby('customer_id').agg({
-        'status': get_most_recent_value,                    # Most recent status
-        'is_gifted_member': get_most_recent_value,          # Most recent gift status
-        'current_period_start_utc': get_most_recent_value,  # Current period start
-        'current_period_end_utc': get_most_recent_value,    # Current period end
-        'trial_start_utc': get_most_recent_value,           # Most recent trial start
-        'trial_end_utc': get_most_recent_value,             # Most recent trial end
-        'canceled_during_trial': get_most_recent_value,          # Last trial cancellation
-        'canceled_during_refund_period': get_most_recent_value,  # Last refund cancellation
-        'full_member': get_most_recent_value,                # Last full member status
-        'refund_period_end_utc': get_most_recent_value,      # Last refund period end
-    }).reset_index()
-    
-    # Gifted history
-    gift_history = df_sorted.groupby('customer_id').agg({
-        'is_gifted_member': 'any'}).reset_index()
-    gift_history.rename(columns={'is_gifted_member': 'ever_had_gift'}, inplace=True)
-
-
-    # Merge the data
-    customer_df = customer_df.merge(latest_subscription_data, on='customer_id')
-    customer_df = customer_df.merge(gift_history, on='customer_id')
-    
-    
-    # Upgraded from gift: had gifts AND became full member
-    customer_df['upgraded_from_gift'] = (
-        customer_df['ever_had_gift'] &      # A eu un cadeau avant
-        ~customer_df['is_gifted_member'] &  # Subscription actuelle N'EST PAS un cadeau
-        customer_df['full_member']          # Et est full member
-    )
-    
-    return customer_df
-
-
-customer_df = groupby_customer_id(df)
-
-
-# %%
-# WEEKS ARE FROM MONDAY TO SUNDAY
-
-def get_specific_past_week(weeks_back=1, reference_date=None):
-    """
-    Get specific date for a specific week.
-    weeks_back=1 : last week (from Monday to Sunday)
-    weeks_back=2 : previous week (from Monday to Sunday)
-    weeks_back=3 : three weeks ago (from Monday to Sunday)
-    """
-
-    if reference_date is None:
-        today = pd.Timestamp.now(tz='UTC')
-    else:
-        if hasattr(reference_date, 'tz') and reference_date.tz is not None:
-            today = pd.to_datetime(reference_date).tz_convert('UTC')
-        else:
-            today = pd.to_datetime(reference_date).tz_localize('UTC')
-      
-    
-    # Finding the Monday of the target week
-    days_since_monday = today.weekday()
-    this_monday = today - pd.Timedelta(days=days_since_monday)
-    target_monday = this_monday - pd.Timedelta(days=7 * weeks_back)
-    target_sunday = target_monday + pd.Timedelta(days=6)
-
-    week_start = target_monday.normalize()  # 00:00:00
-    week_end = target_sunday.normalize() + pd.Timedelta(hours=23, minutes=59, seconds=59)  # 23:59:59
-    
-    # Las week info
-    week_info = {
-        'weeks_ago': weeks_back,
-        'week_start': week_start,
-        'week_end': week_end, 
-        'year': target_monday.year,
-        'week_number': target_monday.isocalendar().week,
-        'year_week': f"{target_monday.year}-W{target_monday.isocalendar().week:02d}",
-    }
-    
-    return week_info
-
-# %% 
-##########################################################################################################
-
-def analyze_stripe_date_patterns(df):
-    """
-    Analyze date patterns to understand Stripe's behavior during automatic renewals
-    """
-    print("🔍 STRIPE DATE PATTERNS ANALYSIS")
+    print("🚀 FAST WEEKLY SUBSCRIPTION ANALYSIS")
     print("=" * 50)
     
-    # Filter subscriptions without trial and non-gifted
-    no_trial_subs = df[(df['trial_duration'] == 0) & (~df['is_gifted_member'])].copy()
+    # Prepare data
+    df = df.copy()
+    date_cols = ['created', 'trial_start', 'trial_end', 'canceled_at', 'ended_at', 
+                 'current_period_start', 'current_period_end']
     
-    # Calculate differences between key dates
-    no_trial_subs['created_to_start_hours'] = (
-        no_trial_subs['start_utc'] - no_trial_subs['created_utc']
-    ).dt.total_seconds() / 3600
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], utc=True)
     
-    no_trial_subs['created_to_period_start_hours'] = (
-        no_trial_subs['current_period_start_utc'] - no_trial_subs['created_utc']
-    ).dt.total_seconds() / 3600
+    # Generate weekly periods
+    start_date = df['created'].min().normalize()
+    end_date = today_date.normalize()
     
-    no_trial_subs['start_to_period_start_hours'] = (
-        no_trial_subs['current_period_start_utc'] - no_trial_subs['start_utc']
-    ).dt.total_seconds() / 3600
+    # Create weekly periods (much faster than individual processing)
+    week_starts = pd.date_range(start_date, end_date, freq='W-MON')
     
-    print(f"📊 ANALYSIS OF {len(no_trial_subs)} SUBSCRIPTIONS WITHOUT TRIAL")
-    print(f"\n🕐 TIME DIFFERENCES:")
+    print(f"📅 Processing {len(week_starts)} weeks from {start_date.date()} to {end_date.date()}")
     
-    # Analysis created_utc vs start_utc
-    print(f"Created → Start:")
-    print(f"  - Same moment (0h): {(no_trial_subs['created_to_start_hours'] == 0).sum()}")
-    print(f"  - < 1h: {(no_trial_subs['created_to_start_hours'].abs() < 1).sum()}")
-    print(f"  - < 8h: {(no_trial_subs['created_to_start_hours'].abs() < 8).sum()}")
-    print(f"  - Average: {no_trial_subs['created_to_start_hours'].mean():.2f}h")
+    # Pre-calculate subscription phases for vectorized operations
+    df = add_subscription_phases(df, today_date)
     
-    # Analysis created_utc vs current_period_start_utc
-    print(f"\nCreated → Period Start:")
-    print(f"  - Same moment (0h): {(no_trial_subs['created_to_period_start_hours'] == 0).sum()}")
-    print(f"  - < 1h: {(no_trial_subs['created_to_period_start_hours'].abs() < 1).sum()}")
-    print(f"  - < 8h: {(no_trial_subs['created_to_period_start_hours'].abs() < 8).sum()}")
-    print(f"  - Average: {no_trial_subs['created_to_period_start_hours'].mean():.2f}h")
+    weekly_results = []
     
-    # Analysis start_utc vs current_period_start_utc
-    print(f"\nStart → Period Start:")
-    print(f"  - Same moment (0h): {(no_trial_subs['start_to_period_start_hours'] == 0).sum()}")
-    print(f"  - < 1h: {(no_trial_subs['start_to_period_start_hours'].abs() < 1).sum()}")
-    print(f"  - < 8h: {(no_trial_subs['start_to_period_start_hours'].abs() < 8).sum()}")
-    print(f"  - Average: {no_trial_subs['start_to_period_start_hours'].mean():.2f}h")
-    
-    # Look for suspicious patterns for renewals
-    df_sorted = df.sort_values(['customer_id', 'created_utc'])
-    
-    potential_renewals = []
-    for idx, row in no_trial_subs.iterrows():
-        customer_id = row['customer_id']
-        current_created = row['created_utc']
+    # Process weeks in batches for speed
+    batch_size = 10
+    for i in range(0, len(week_starts), batch_size):
+        batch_weeks = week_starts[i:i+batch_size]
+        print(f"📊 Processing batch {i//batch_size + 1}/{(len(week_starts)-1)//batch_size + 1}")
         
-        # Customer history
-        customer_history = df_sorted[
-            (df_sorted['customer_id'] == customer_id) & 
-            (df_sorted['created_utc'] < current_created)
-        ]
-        
-        if len(customer_history) > 0:
-            # Suspicious pattern: created_utc very close to current_period_start_utc
-            # but customer has history
-            created_to_period_hours = abs(row['created_to_period_start_hours'])
+        for week_start in batch_weeks:
+            week_end = week_start + pd.Timedelta(days=6, hours=23, minutes=59, seconds=59)
             
-            if created_to_period_hours <= 8:  # Less than 8h difference
-                last_sub = customer_history.iloc[-1]
-                
-                potential_renewals.append({
-                    'customer_id': customer_id,
-                    'current_created': current_created,
-                    'current_period_start': row['current_period_start_utc'],
-                    'hours_diff': created_to_period_hours,
-                    'last_sub_created': last_sub['created_utc'],
-                    'last_sub_canceled': last_sub['canceled_at_utc'],
-                    'last_sub_ended': last_sub['ended_at_utc']
-                })
+            # Fast vectorized calculations
+            week_metrics = calculate_week_metrics_vectorized(df, week_start, week_end, today_date)
+            weekly_results.append(week_metrics)
     
-    print(f"\n🚨 POTENTIAL RENEWALS DETECTED: {len(potential_renewals)}")
+    # Convert to DataFrame
+    weekly_df = pd.DataFrame(weekly_results)
     
-    if len(potential_renewals) > 0:
-        renewal_df = pd.DataFrame(potential_renewals)
-        print(f"Distribution by time gap:")
-        print(f"  - < 1h: {(renewal_df['hours_diff'] < 1).sum()}")
-        print(f"  - 1-8h: {((renewal_df['hours_diff'] >= 1) & (renewal_df['hours_diff'] <= 8)).sum()}")
-        print(f"  - 8h+: {(renewal_df['hours_diff'] > 8).sum()}")
+    # Add derived metrics
+    weekly_df['net_growth'] = weekly_df['new_subscriptions'] - weekly_df['cancellations']
+    weekly_df['trial_conversion_rate'] = np.where(
+        weekly_df['trial_signups'] > 0,
+        weekly_df['trial_conversions'] / weekly_df['trial_signups'] * 100,
+        0
+    )
+    
+    print(f"✅ Analysis complete! Processed {len(weekly_df)} weeks")
+    
+    # Export to CSV
+    if export_csv:
+        filename = f"weekly_subscription_analysis_{today_date.strftime('%Y%m%d')}.csv"
+        weekly_df.to_csv(filename, index=False)
+        print(f"💾 Results exported to: {filename}")
         
-        # Show some examples
-        print(f"\n📋 EXAMPLES (first 5):")
-        for i, row in renewal_df.head().iterrows():
-            print(f"  Customer {row['customer_id']}: {row['hours_diff']:.1f}h gap")
+        # Also export summary
+        summary_filename = f"subscription_summary_{today_date.strftime('%Y%m%d')}.csv"
+        create_summary_export(df, weekly_df, summary_filename)
+        print(f"📋 Summary exported to: {summary_filename}")
     
-    return no_trial_subs, potential_renewals
+    return weekly_df
 
-
-def classify_no_trial_subscriptions(df):
+def add_subscription_phases(df, today_date):
     """
-    New classification logic with updated rules:
-    1. Gift-to-Pay: Had at least 1 gift + current subscription without trial + not currently gifted
-    2. Renewal: Gap ≤ 1 day OR detected via Stripe patterns
-    3. Winback: Gap > 1 day (regardless of whether previous was trial-only)
-    4. Edge Case/Unknown: Everything else
+    Pre-calculate subscription lifecycle phases for fast filtering
     """
+    print("⚡ Pre-calculating subscription phases...")
     
-    df_sorted = df.sort_values(['customer_id', 'created_utc'])
-    no_trial_mask = (df['trial_duration'] == 0) & (~df['is_gifted_member'])
-    
-    results = []
-    
-    for idx, row in df[no_trial_mask].iterrows():
-        customer_id = row['customer_id']
-        current_created = row['created_utc']
-        current_period_start = row['current_period_start_utc']
-        
-        # Customer history
-        customer_history = df_sorted[
-            (df_sorted['customer_id'] == customer_id) & 
-            (df_sorted['created_utc'] < current_created)
-        ]
-        
-        # Stripe renewal pattern detection
-        created_to_period_hours = abs((current_period_start - current_created).total_seconds() / 3600)
-        potential_stripe_renewal = (len(customer_history) > 0) and (created_to_period_hours <= 8)
-        
-        if len(customer_history) == 0:
-            # No history = first subscription
-            classification = 'unknown'
-            previous_status = None
-            previous_created = None
-            previous_canceled = None
-            gap_days = None
-            stripe_renewal_detected = False
-            
-        else:
-            last_subscription = customer_history.iloc[-1]
-            previous_status = last_subscription['status']
-            previous_created = last_subscription['created_utc']
-            previous_canceled = last_subscription['canceled_at_utc']
-            stripe_renewal_detected = potential_stripe_renewal
-            
-            # 1. GIFT-TO-PAY: Had at least 1 gift in history
-            had_gift = customer_history['is_gifted_member'].any()
-            
-            if had_gift:
-                classification = 'gift_to_paid_winback'
-                gap_days = None if pd.isna(previous_canceled) else (current_created - previous_canceled).days
-                
-            # 2. RENEWAL: Gap ≤ 1 day OR Stripe pattern detected
-            elif (pd.notna(previous_canceled) and 
-                  (current_created - previous_canceled).days <= 1) or potential_stripe_renewal:
-                classification = 'renewal'
-                gap_days = None if pd.isna(previous_canceled) else (current_created - previous_canceled).days
-                
-            # 3. WINBACK: Gap > 1 day
-            elif (pd.notna(previous_canceled) and 
-                  (current_created - previous_canceled).days > 1):
-                classification = 'winback'
-                gap_days = (current_created - previous_canceled).days
-                
-            # 4. EDGE CASE/UNKNOWN
-            else:
-                classification = 'unknown'
-                gap_days = None
-        
-        results.append({
-            'index': idx,
-            'customer_id': customer_id,
-            'classification': classification,
-            'previous_status': previous_status,
-            'previous_created': previous_created,
-            'previous_canceled': previous_canceled,
-            'gap_days': gap_days,
-            'stripe_renewal_detected': stripe_renewal_detected,
-            'created_to_period_hours': created_to_period_hours
-        })
-    
-    return pd.DataFrame(results)
-
-
-def detailed_weekly_analysis(df, weeks_back=1, reference_date=None):
-    """
-    Updated version of weekly analysis with new logic
-    """
-    if reference_date is None:
-        reference_date = pd.Timestamp.now(tz='UTC')
-        
-    week_info = get_specific_past_week(weeks_back=weeks_back, reference_date=reference_date)
-    week_start = week_info['week_start']
-    week_end = week_info['week_end']
-
-    print(f'🗓️  WEEK {week_info["year_week"]} ({weeks_back} week{"s" if weeks_back > 1 else ""} ago)')
-    print(f'From Monday {week_start.strftime("%d/%m")} to Sunday {week_end.strftime("%d/%m/%Y")}')
-    print('=' * 60)
-    
-    # NEW SUBSCRIPTIONS FOR THE WEEK
-    new_subscriptions = df[
-        (df['created_utc'] >= week_start) &
-        (df['created_utc'] <= week_end)
-    ]
-    len_new_subscriptions = len(new_subscriptions)
-    
-    # TRIALERS
-    new_trialers = new_subscriptions[new_subscriptions['trial_duration'] > 0]
-    len_new_trialers = len(new_trialers)
-    
-    # GIFTED
-    new_gifted = new_subscriptions[new_subscriptions['is_gifted_member'] == True]
-    len_new_gifted = len(new_gifted)
-
-    # CLASSIFICATION OF SUBSCRIPTIONS WITHOUT TRIAL
-    classification_results = classify_no_trial_subscriptions(df)
-    weekly_no_trial = new_subscriptions[
-        (new_subscriptions['trial_duration'] == 0) & 
-        (~new_subscriptions['is_gifted_member'])
-    ].copy()
-
-    if len(weekly_no_trial) == 0:
-        len_renewals = len_winbacks = len_gift_to_paid = len_unknowns = 0
-        len_stripe_renewals = 0
-        renewal_subscriptions = winback_subscriptions = pd.DataFrame()
-        gift_to_paid_subscriptions = unknown_subscriptions = pd.DataFrame()
+    # Handle gift column - check what exists in your DataFrame
+    if 'is_gifted_member' in df.columns:
+        df['is_gift'] = df['is_gifted_member'].fillna(False).astype(bool)
+    elif 'is_gift' not in df.columns:
+        df['is_gift'] = False
     else:
-        weekly_classified = weekly_no_trial.merge(
-            classification_results, 
-            left_index=True, 
-            right_on='index', 
-            how='left'
+        df['is_gift'] = df['is_gift'].fillna(False).astype(bool)
+    
+    # Calculate key lifecycle dates
+    df['paying_start_date'] = np.where(
+        df['trial_end'].notna(),
+        df['trial_end'],  # Post-trial: paying starts after trial
+        df['created']     # No trial: paying starts immediately
+    )
+    
+    # Subscription status at different points
+    df['is_trial_subscription'] = df['trial_start'].notna()
+    df['trial_duration_days'] = (df['trial_end'] - df['trial_start']).dt.days.fillna(0)
+    
+    # Determine final outcomes
+    df['trial_converted'] = (
+        df['is_trial_subscription'] &
+        (df['canceled_at'].isna() | (df['canceled_at'] > df['trial_end']))
+    )
+    
+    df['trial_canceled'] = (
+        df['is_trial_subscription'] &
+        df['canceled_at'].notna() &
+        (df['canceled_at'] <= df['trial_end'])
+    )
+    
+    # Calculate subscription lifetime
+    df['subscription_end_date'] = df['ended_at'].fillna(today_date)
+    df['subscription_lifetime_days'] = (df['subscription_end_date'] - df['created']).dt.days
+    
+    # Active periods
+    df['was_active'] = df['status'].isin(['active', 'trialing', 'canceled'])
+    
+    return df
+
+def calculate_week_metrics_vectorized(df, week_start, week_end, today_date):
+    """
+    Calculate weekly metrics using vectorized operations (MUCH faster)
+    """
+    
+    # 1. NEW SUBSCRIPTIONS THIS WEEK
+    new_subs_mask = (df['created'] >= week_start) & (df['created'] <= week_end)
+    new_subscriptions = df[new_subs_mask]
+    
+    # 2. TRIAL SIGNUPS THIS WEEK
+    trial_signups_mask = (
+        (df['trial_start'] >= week_start) & 
+        (df['trial_start'] <= week_end)
+    )
+    trial_signups = df[trial_signups_mask]
+    
+    # 3. TRIAL CONVERSIONS THIS WEEK (trial ended and converted)
+    trial_conversion_mask = (
+        (df['trial_end'] >= week_start) & 
+        (df['trial_end'] <= week_end) &
+        (df['trial_converted'] == True)
+    )
+    trial_conversions = df[trial_conversion_mask]
+    
+    # 4. CANCELLATIONS THIS WEEK
+    cancellation_mask = (
+        (df['canceled_at'] >= week_start) & 
+        (df['canceled_at'] <= week_end)
+    )
+    cancellations = df[cancellation_mask]
+    
+    # 5. ACTIVE SUBSCRIPTIONS AT END OF WEEK
+    # Subscription was created before week end AND (not canceled OR canceled after week end)
+    active_at_week_end_mask = (
+        (df['created'] <= week_end) &
+        (
+            df['canceled_at'].isna() |
+            (df['canceled_at'] > week_end)
+        ) &
+        (
+            df['ended_at'].isna() |
+            (df['ended_at'] > week_end)
         )
-        weekly_classified['classification'] = weekly_classified['classification'].fillna('unknown')
-        
-        # Count each category
-        len_renewals = (weekly_classified['classification'] == 'renewal').sum()
-        len_winbacks = (weekly_classified['classification'] == 'winback').sum()
-        len_gift_to_paid = (weekly_classified['classification'] == 'gift_to_paid_winback').sum()
-        len_unknowns = (weekly_classified['classification'] == 'unknown').sum()
-        len_stripe_renewals = (weekly_classified['stripe_renewal_detected'] == True).sum()
-        
-        # Create DataFrames
-        renewal_subscriptions = weekly_classified[weekly_classified['classification'] == 'renewal']
-        winback_subscriptions = weekly_classified[weekly_classified['classification'] == 'winback']
-        gift_to_paid_subscriptions = weekly_classified[weekly_classified['classification'] == 'gift_to_paid_winback']
-        unknown_subscriptions = weekly_classified[weekly_classified['classification'] == 'unknown']
-
-    # OTHER METRICS
-    new_canceled_during_trial = df[
-        (df['canceled_during_trial'] == True) &
-        (df['canceled_at_utc'].notna()) &
-        (df['canceled_at_utc'] >= week_start) &
-        (df['canceled_at_utc'] <= week_end)
-    ]
-    len_new_canceled_during_trial = len(new_canceled_during_trial)
+    )
+    active_at_week_end = df[active_at_week_end_mask]
     
-    new_canceled_during_refund = df[
-        (df['canceled_during_refund_period'] == True) &
-        (df['canceled_at_utc'].notna()) &
-        (df['canceled_at_utc'] >= week_start) &
-        (df['canceled_at_utc'] <= week_end)
-    ]
-    len_new_canceled_during_refund = len(new_canceled_during_refund)
-
-    new_full_members = df[
-        (df['full_member'] == True) &
-        (df['refund_period_end_utc'] >= week_start) &
-        (df['refund_period_end_utc'] <= week_end)
-    ]
-    len_new_full_members = len(new_full_members)
-    
-    # DISPLAY
-    print(f"📈 {len_new_subscriptions} NEW SUBSCRIPTIONS")
-    print(f"  ├─ 🎯 {len_new_trialers} New Trialers")
-    print(f"  ├─ 🎁 {len_new_gifted} Gifted Members")
-    print(f"  ├─ 🔄 {len_renewals} RENEWALS (automatic renewals)")
-    if len_stripe_renewals > 0:
-        print(f"  │   └─ 🤖 {len_stripe_renewals} detected via Stripe pattern")
-    print(f"  ├─ 🔙 {len_winbacks} WINBACKS (returning customers)")
-    print(f"  ├─ 💝 {len_gift_to_paid} Gift-to-Paid (ex-gifts → paid)")
-    print(f"  └─ ❓ {len_unknowns} UNKNOWN")
-    print()
-    print(f"✅ {len_new_full_members} Became Full Members")
-    print(f"❌ {len_new_canceled_during_trial} Canceled during trial")
-    print(f"💔 {len_new_canceled_during_refund} Canceled during refund")
-    print()
-
-    # Clean merge columns for returned DataFrames
-    def clean_merge_columns(df):
-        if len(df) > 0 and 'customer_id_x' in df.columns:
-            df = df.drop(['customer_id_y', 'index'], axis=1, errors='ignore')
-            df = df.rename(columns={'customer_id_x': 'customer_id'})
-        return df
-
-    renewal_subscriptions = clean_merge_columns(renewal_subscriptions)
-    winback_subscriptions = clean_merge_columns(winback_subscriptions) 
-    gift_to_paid_subscriptions = clean_merge_columns(gift_to_paid_subscriptions)
-    unknown_subscriptions = clean_merge_columns(unknown_subscriptions)
-    
-    # SUMMARY DICTIONARY
-    week_dict = {
-        'week_start': week_start, 'week_end': week_end, 'year_week': week_info['year_week'],
-        'weeks_ago': week_info['weeks_ago'], 'new_subscriptions': len_new_subscriptions,
-        'new_trialers': len_new_trialers, 'new_gifted': len_new_gifted,
-        'renewals': len_renewals, 'winbacks': len_winbacks,
-        'gift_to_paid_converters': len_gift_to_paid, 'unknowns': len_unknowns,
-        'stripe_renewals_detected': len_stripe_renewals,
-        'new_full_members': len_new_full_members,
-        'new_canceled_during_trial': len_new_canceled_during_trial,
-        'new_canceled_during_refund': len_new_canceled_during_refund
-    }
-    
-    # DETAILED DATA
-    detailed_data = {
-        'renewal_subscriptions': renewal_subscriptions,
-        'winback_subscriptions': winback_subscriptions,
-        'gift_to_paid_subscriptions': gift_to_paid_subscriptions,
-        'unknown_subscriptions': unknown_subscriptions,
-        'new_gifted': new_gifted,
-        'new_trialers': new_trialers
-    }
-   
-    return week_dict, detailed_data
-
-
-def analyze_winback_timing(winback_subscriptions, df):
-    """Analyze timing of winback returns"""
-    
-    if len(winback_subscriptions) == 0:
-        print("No winbacks this week.")
-        return pd.DataFrame()
-    
-    winback_analysis = []
-    
-    for idx, winback in winback_subscriptions.iterrows():
-        customer_id = winback['customer_id']
-        previous_created = winback['previous_created']
-        current_created = winback['created_utc']
-        
-        # Calculate return delay
-        time_away = (current_created - previous_created).days
-        
-        winback_analysis.append({
-            'customer_id': customer_id,
-            'time_away_days': time_away,
-            'previous_created': previous_created,
-            'current_created': current_created,
-            'time_away_months': round(time_away / 30.44, 1)  # Rough month approximation
-        })
-    
-    winback_df = pd.DataFrame(winback_analysis)
-    
-    print(f"\n📊 WINBACK TIMING ANALYSIS ({len(winback_df)} customers):")
-    print(f"Average return delay: {winback_df['time_away_days'].mean():.1f} days ({winback_df['time_away_months'].mean():.1f} months)")
-    print(f"Median delay: {winback_df['time_away_days'].median():.0f} days ({winback_df['time_away_months'].median():.1f} months)")
-    print(f"Fastest: {winback_df['time_away_days'].min()} days")
-    print(f"Slowest: {winback_df['time_away_days'].max()} days ({winback_df['time_away_months'].max():.1f} months)")
-    
-    # Distribution by brackets
-    bins = [0, 30, 90, 180, 365, float('inf')]
-    labels = ['<1 month', '1-3 months', '3-6 months', '6-12 months', '>1 year']
-    winback_df['time_category'] = pd.cut(winback_df['time_away_days'], bins=bins, labels=labels)
-    
-    print(f"\n🗓️ DISTRIBUTION BY PERIOD:")
-    distribution = winback_df['time_category'].value_counts().sort_index()
-    for category, count in distribution.items():
-        percentage = (count / len(winback_df)) * 100
-        print(f"  {category}: {count} customers ({percentage:.1f}%)")
-    
-    return winback_df
-
-
-def test_new_classification(df, reference_date):
-    """
-    Test the new classification and compare with old one if needed
-    """
-    print("🧪 NEW CLASSIFICATION TEST")
-    print("=" * 50)
-    
-    # 1. Date pattern analysis
-    date_analysis, potential_renewals = analyze_stripe_date_patterns(df)
-    
-    print("\n" + "=" * 50)
-    
-    # 2. Test on last 4 weeks
-    for week in range(1, 5):
-        week_dict, detailed_data = detailed_weekly_analysis(df, weeks_back=week, reference_date=reference_date)
-        
-        # Quick winback analysis if any
-        if len(detailed_data['winback_subscriptions']) > 0:
-            winback_timing = analyze_winback_timing(detailed_data['winback_subscriptions'], df)
-    
-    return date_analysis, potential_renewals
-
-
-# USAGE EXAMPLE - REPLACE THE END OF YOUR SCRIPT WITH THIS:
-
-# Replace your current calls with this:
-date_analysis, potential_renewals = test_new_classification(df, today_date)
-
-# Or for specific week analysis:
-# week_dict, detailed_data = detailed_weekly_analysis(df, weeks_back=1, reference_date=today_date)
-# winback_timing = analyze_winback_timing(detailed_data['winback_subscriptions'], df)
-
-def diagnose_stripe_data_coherence(df):
-    """
-    Diagnostic pour vérifier la cohérence des données avec la logique Stripe
-    Maintenant avec la vraie colonne 'id' (subscription_id)
-    """
-    """
-    Diagnostic pour vérifier la cohérence des données avec la logique Stripe
-    """
-    print("🔍 DIAGNOSTIC DE COHÉRENCE STRIPE")
-    print("=" * 50)
-    
-    # 1. Vérifier les subscription_id (colonne 'id')
-    has_subscription_id = 'id' in df.columns
-    print(f"📋 Subscription ID présent: {has_subscription_id}")
-    
-    if has_subscription_id:
-        # Cas où on a l'ID : vérifier les duplicatas
-        duplicate_subs = df.groupby('id').size()
-        duplicates = duplicate_subs[duplicate_subs > 1]
-        print(f"🚨 Subscriptions dupliquées: {len(duplicates)}")
-        
-        if len(duplicates) > 0:
-            print("⚠️  ALERTE: Plusieurs lignes pour même subscription_id")
-            print("   Ceci viole la logique Stripe (1 sub = 1 ligne)")
-            print(f"   Exemples: {duplicates.head().to_dict()}")
-            
-            # Analyser les duplicatas
-            duplicate_examples = df[df['id'].isin(duplicates.index)].sort_values(['id', 'created_utc'])
-            print("   Détail des duplicatas:")
-            for sub_id in duplicates.index[:3]:  # 3 premiers exemples
-                sub_data = duplicate_examples[duplicate_examples['id'] == sub_id]
-                print(f"   {sub_id}:")
-                for idx, row in sub_data.iterrows():
-                    print(f"     - Created: {row['created_utc']}, Status: {row['status']}")
-        else:
-            print("✅ Pas de subscription_id dupliqué - données cohérentes")
-    
-    # 2. Analyser les patterns temporels suspects
-    print(f"\n🕐 ANALYSE DES PATTERNS TEMPORELS")
-    
-    # Clients avec multiples souscriptions
-    customer_counts = df['customer_id'].value_counts()
-    multi_sub_customers = customer_counts[customer_counts > 1]
-    print(f"👥 Clients avec multiples subscriptions: {len(multi_sub_customers)}")
-    
-    if len(multi_sub_customers) > 0:
-        # Analyser les gaps temporels
-        df_sorted = df.sort_values(['customer_id', 'created_utc'])
-        df_sorted['prev_created'] = df_sorted.groupby('customer_id')['created_utc'].shift(1)
-        df_sorted['gap_hours'] = (df_sorted['created_utc'] - df_sorted['prev_created']).dt.total_seconds() / 3600
-        
-        valid_gaps = df_sorted['gap_hours'].dropna()
-        
-        print(f"⏱️  Gaps entre subscriptions:")
-        print(f"   < 1 heure: {(valid_gaps < 1).sum()} cas")
-        print(f"   < 1 jour: {(valid_gaps < 24).sum()} cas") 
-        print(f"   < 1 semaine: {(valid_gaps < 168).sum()} cas")
-        print(f"   Médiane: {valid_gaps.median():.1f} heures")
-        
-        # Cas suspects (très courts gaps)
-        suspect_gaps = valid_gaps[valid_gaps < 1]
-        if len(suspect_gaps) > 0:
-            print(f"🚨 {len(suspect_gaps)} gaps < 1h (suspects de duplicatas techniques)")
-    
-    # 3. Vérifier la cohérence des statuts
-    print(f"\n📊 ANALYSE DES STATUTS")
-    status_counts = df['status'].value_counts()
-    print(f"Distribution des statuts:")
-    for status, count in status_counts.items():
-        pct = (count / len(df)) * 100
-        print(f"   {status}: {count} ({pct:.1f}%)")
-    
-    # 4. Vérifier les champs critiques manquants
-    print(f"\n📋 CHAMPS CRITIQUES")
-    critical_fields = [
-        'subscription_id', 'billing_reason', 'invoice_id', 
-        'payment_intent_id', 'latest_invoice'
-    ]
-    
-    for field in critical_fields:
-        present = field in df.columns
-        symbol = "✅" if present else "❌"
-        print(f"   {symbol} {field}: {'présent' if present else 'manquant'}")
-    
-    # 5. Recommandations
-    print(f"\n💡 RECOMMANDATIONS")
-    
-    if not has_subscription_id:
-        print("⚠️  CRITIQUE: Ajoutez subscription_id pour une analyse correcte")
-    
-    if len(multi_sub_customers) > len(df) * 0.1:  # >10% de clients avec multi-subs
-        print("⚠️  Beaucoup de multi-subscriptions. Vérifiez:")
-        print("   - Source des données (Dashboard vs Webhook vs DB)")
-        print("   - Processus d'export")
-        print("   - Possible dédoublonnement technique")
-    
-    # 6. Test de cohérence Stripe spécifique
-    print(f"\n🧪 TEST COHÉRENCE STRIPE")
-    
-    if has_subscription_id:
-        # Vérifier unicité des subscription_ids
-        unique_subs = df['id'].nunique()
-        total_rows = len(df)
-        print(f"   Subscriptions uniques: {unique_subs}")
-        print(f"   Total lignes: {total_rows}")
-        
-        if unique_subs == total_rows:
-            print("   ✅ 1 ligne = 1 subscription (cohérent avec Stripe)")
-        else:
-            print("   🚨 Plusieurs lignes pour certaines subscriptions")
-            print("      Ceci contredit la logique Stripe native")
-    
-    # Test des patterns de renouvellement suspects
-    df_sorted = df.sort_values(['customer_id', 'created_utc'])
-    customer_multiple_subs = df_sorted.groupby('customer_id').size()
-    customers_with_multiple = customer_multiple_subs[customer_multiple_subs > 1]
-    
-    if len(customers_with_multiple) > 0:
-        print(f"\n📊 ANALYSE CLIENTS MULTIPLES SUBSCRIPTIONS")
-        print(f"   {len(customers_with_multiple)} clients avec multiples subscriptions")
-        
-        # Analyser un exemple détaillé
-        example_customer = customers_with_multiple.index[0]
-        example_subs = df_sorted[df_sorted['customer_id'] == example_customer]
-        
-        print(f"\n   Exemple client {example_customer}:")
-        for idx, row in example_subs.iterrows():
-            status = row['status']
-            created = row['created_utc'].strftime('%Y-%m-%d %H:%M')
-            sub_id = row['id'][:20] + "..." if len(row['id']) > 20 else row['id']
-            print(f"     {created} | {status} | {sub_id}")
-    
-    # Cas impossible selon Stripe
-    impossible_cases = []
-    
-    # Trial qui commence après created
-    trial_after_created = df[
-        (df['trial_start_utc'].notna()) & 
-        (df['trial_start_utc'] > df['created_utc'])
-    ]
-    if len(trial_after_created) > 0:
-        impossible_cases.append(f"Trial start > created: {len(trial_after_created)} cas")
-    
-    # Current period start avant created
-    period_before_created = df[
-        (df['current_period_start_utc'].notna()) & 
-        (df['current_period_start_utc'] < df['created_utc'])
-    ]
-    if len(period_before_created) > 0:
-        impossible_cases.append(f"Period start < created: {len(period_before_created)} cas")
-    
-    if impossible_cases:
-        print("🚨 CAS IMPOSSIBLES DÉTECTÉS:")
-        for case in impossible_cases:
-            print(f"   - {case}")
-    else:
-        print("✅ Pas d'incohérences temporelles détectées")
+    # 6. FULL MEMBERS AT END OF WEEK (active + past 14-day refund period)
+    refund_cutoff = week_end - pd.Timedelta(days=14)
+    full_members_mask = (
+        active_at_week_end_mask &
+        (df['paying_start_date'] <= refund_cutoff) &
+        (~df['is_gift'])
+    )
+    full_members = df[full_members_mask]
     
     return {
-        'has_subscription_id': has_subscription_id,
-        'duplicate_subscriptions': len(duplicates) if has_subscription_id else 0,
-        'multi_subscription_customers': len(multi_sub_customers),
-        'impossible_cases': len(impossible_cases)
+        'year_week': f"{week_start.year}-W{week_start.isocalendar().week:02d}",
+        'week_start': week_start,
+        'week_end': week_end,
+        
+        # Weekly events
+        'new_subscriptions': len(new_subscriptions),
+        'trial_signups': len(trial_signups),
+        'trial_conversions': len(trial_conversions),
+        'cancellations': len(cancellations),
+        'trial_cancellations': len(cancellations[cancellations['trial_canceled']]),
+        
+        # Member counts at end of week
+        'active_subscriptions_end': len(active_at_week_end),
+        'full_members_end': len(full_members),
+        'gift_subscriptions_end': len(active_at_week_end[active_at_week_end['is_gift']]),
+        
+        # Member types in new subscriptions
+        'new_trial_subscriptions': len(new_subscriptions[new_subscriptions['is_trial_subscription']]),
+        'new_immediate_paid': len(new_subscriptions[~new_subscriptions['is_trial_subscription']]),
+        'new_gift_subscriptions': len(new_subscriptions[new_subscriptions['is_gift']]),
     }
 
-# Usage
-diagnostic_result = diagnose_stripe_data_coherence(df)
-#########################################################################################################
-# %%
-# def classify_no_trial_subscriptions(df):
-#     """
-#     Logique corrigée avec toutes les colonnes nécessaires
-#     """
-#     df_sorted = df.sort_values(['customer_id', 'created_utc'])
-#     no_trial_mask = (df['trial_duration'] == 0) & (~df['is_gifted_member'])
-#
-#     results = []
-#
-#     for idx, row in df[no_trial_mask].iterrows():
-#         customer_id = row['customer_id']
-#         current_created = row['created_utc']
-#
-#         customer_history = df_sorted[
-#             (df_sorted['customer_id'] == customer_id) & 
-#             (df_sorted['created_utc'] < current_created)
-#         ]
-#
-#         if len(customer_history) == 0:
-#             classification = 'renewal'
-#             previous_status = None
-#             previous_created = None
-#             previous_canceled = None
-#             gap_days = None
-#         else:
-#             last_subscription = customer_history.iloc[-1]
-#             previous_status = last_subscription['status']
-#             previous_created = last_subscription['created_utc']  # ← AJOUTÉ
-#             previous_canceled = last_subscription['canceled_at_utc']
-#
-#             # Vérifier si c'est un vrai winback (gap > 1 jour)
-#             if (last_subscription['status'] in ['canceled', 'trialing'] and
-#                 pd.notna(last_subscription['canceled_at_utc']) and
-#                 pd.notna(current_created)):
-#
-#                 gap_days = (current_created - last_subscription['canceled_at_utc']).days
-#
-#                 if gap_days > 1:  # Plus d'1 jour = vrai winback
-#                     had_gift = customer_history['is_gifted_member'].any()
-#                     had_trial = (customer_history['trial_duration'] > 0).any()
-#
-#                     if had_gift and not had_trial:
-#                         classification = 'gift_to_paid_winback'
-#                     elif had_trial or had_gift:
-#                         classification = 'winback'
-#                     else:
-#                         classification = 'winback'
-#                 else:
-#                     # Gap ≤ 1 jour = renewal automatique
-#                     classification = 'renewal'
-#             elif last_subscription['status'] == 'active':
-#                 # Edge case = unknown
-#                 classification = 'unknown'
-#                 gap_days = None
-#             else:
-#                 # Autres cas = renewal
-#                 classification = 'renewal'
-#                 gap_days = None
-#
-#         results.append({
-#             'index': idx,
-#             'customer_id': customer_id,
-#             'classification': classification,
-#             'previous_status': previous_status,
-#             'previous_created': previous_created,  # ← AJOUTÉ
-#             'previous_canceled': previous_canceled,
-#             'gap_days': gap_days
-#         })
-#
-#     return pd.DataFrame(results)
-#
-# # %%
-#
-# def detailed_weekly_analysis(df, weeks_back=1, reference_date=today_date):
-#     week_info = get_specific_past_week(weeks_back=weeks_back, reference_date=reference_date)
-#     week_start = week_info['week_start']
-#     week_end = week_info['week_end']
-#
-#     print(f'From Monday {week_start} to Sunday {week_end}')
-#     print('-------------------------------------------')
-#
-#     # NEW SUBSCRIPTIONS
-#     new_subscriptions = df[
-#         (df['created_utc'] >= pd.Timestamp(week_start)) &
-#         (df['created_utc'] <= pd.Timestamp(week_end))]
-#     len_new_subscriptions = len(new_subscriptions)
-#
-#     new_trialers = new_subscriptions[new_subscriptions['trial_duration'] > 0]
-#     len_new_trialers = len(new_trialers)
-#
-#     new_gifted = new_subscriptions[new_subscriptions['is_gifted_member'] == True]
-#     len_new_gifted = len(new_gifted)
-#
-#     classification_results = classify_no_trial_subscriptions(df)
-#     weekly_no_trial = new_subscriptions[
-#         (new_subscriptions['trial_duration'] == 0) & 
-#         (~new_subscriptions['is_gifted_member'])
-#     ].copy()
-#
-#     if len(weekly_no_trial) == 0:
-#         len_renewals = len_winbacks = len_gift_to_paid = len_unknowns = 0
-#         renewal_subscriptions = winback_subscriptions = pd.DataFrame()
-#         gift_to_paid_subscriptions = unknown_subscriptions = pd.DataFrame()
-#     else:
-#         weekly_classified = weekly_no_trial.merge(
-#             classification_results, 
-#             left_index=True, 
-#             right_on='index', 
-#             how='left'
-#         )
-#         weekly_classified['classification'] = weekly_classified['classification'].fillna('unknown')
-#
-#         # Compter chaque catégorie
-#         len_renewals = (weekly_classified['classification'] == 'renewal').sum()
-#         len_winbacks = (weekly_classified['classification'] == 'winback').sum()
-#         len_gift_to_paid = (weekly_classified['classification'] == 'gift_to_paid_winback').sum()
-#         len_unknowns = (weekly_classified['classification'] == 'unknown').sum()
-#
-#         # Créer les DataFrames
-#         renewal_subscriptions = weekly_classified[weekly_classified['classification'] == 'renewal']
-#         winback_subscriptions = weekly_classified[weekly_classified['classification'] == 'winback']
-#         gift_to_paid_subscriptions = weekly_classified[weekly_classified['classification'] == 'gift_to_paid_winback']
-#         unknown_subscriptions = weekly_classified[weekly_classified['classification'] == 'unknown']
-#
-#     # Autres métriques
-#     new_canceled_during_trial = df[
-#         (df['canceled_during_trial'] == True) &
-#         (df['canceled_at_utc'].notna()) &
-#         (df['canceled_at_utc'] >= week_start) &
-#         (df['canceled_at_utc'] <= week_end)]
-#     len_new_canceled_during_trial = len(new_canceled_during_trial)
-#
-#     new_canceled_during_refund = df[
-#         (df['canceled_during_refund_period'] == True) &
-#         (df['canceled_at_utc'].notna()) &
-#         (df['canceled_at_utc'] >= pd.Timestamp(week_start)) &
-#         (df['canceled_at_utc'] <= pd.Timestamp(week_end))]
-#     len_new_canceled_during_refund = len(new_canceled_during_refund)
-#
-#     new_full_members = df[
-#         (df['full_member'] == True) &
-#         (df['refund_period_end_utc'] >= week_start) &
-#         (df['refund_period_end_utc'] <= week_end)]
-#     len_new_full_members = len(new_full_members)
-#
-#     # AFFICHAGE (TOUJOURS AFFICHÉ)
-#     print(f"{len_new_subscriptions} New Subscriptions")
-#     print(f"  ├─ {len_new_trialers} New Trialers")
-#     print(f"  ├─ {len_new_gifted} Gifted Members (no trial)")
-#     print(f"  ├─ {len_renewals} RENEWALS (automatic renewals)")
-#     print(f"  ├─ {len_winbacks} WINBACKS (returning customers)")
-#     print(f"  ├─ {len_gift_to_paid} Gift-to-Paid Winbacks")
-#     print(f"  └─ {len_unknowns} UNKNOWN")
-#
-#     print(f"{len_new_full_members} Became Full Members (after refund period)")
-#     print(f"{len_new_canceled_during_trial} Canceled during trial")
-#     print(f"{len_new_canceled_during_refund} Canceled during refund")
-#     print('\n')
-#
-#     # Nettoyage des colonnes
-#     def clean_merge_columns(df):
-#         if len(df) > 0 and 'customer_id_x' in df.columns:
-#             df = df.drop(['customer_id_y', 'index'], axis=1, errors='ignore')
-#             df = df.rename(columns={'customer_id_x': 'customer_id'})
-#         return df
-#
-#     renewal_subscriptions = clean_merge_columns(renewal_subscriptions)
-#     winback_subscriptions = clean_merge_columns(winback_subscriptions) 
-#     gift_to_paid_subscriptions = clean_merge_columns(gift_to_paid_subscriptions)
-#     unknown_subscriptions = clean_merge_columns(unknown_subscriptions)
-#
-#     # DICTIONNAIRE
-#     week_dict = {
-#         'week_start': week_start, 'week_end': week_end, 'year_week': week_info['year_week'],
-#         'weeks_ago': week_info['weeks_ago'], 'new_subscriptions': len_new_subscriptions,
-#         'new_trialers': len_new_trialers, 'new_gifted': len_new_gifted,
-#         'renewals': len_renewals, 'winbacks': len_winbacks,
-#         'gift_to_paid_converters': len_gift_to_paid, 'unknowns': len_unknowns,
-#         'new_full_members': len_new_full_members,
-#         'new_canceled_during_trial': len_new_canceled_during_trial,
-#         'new_canceled_during_refund': len_new_canceled_during_refund
-#     }
-#
-#     # DONNÉES DÉTAILLÉES (TOUJOURS PRÉSENTES)
-#     detailed_data = {
-#         'renewal_subscriptions': renewal_subscriptions,
-#         'winback_subscriptions': winback_subscriptions,
-#         'gift_to_paid_subscriptions': gift_to_paid_subscriptions,
-#         'unknown_subscriptions': unknown_subscriptions,
-#         'new_gifted': new_gifted,
-#         'new_trialers': new_trialers
-#     }
-#
-#     return week_dict, detailed_data
-#
-# # %%
-#
-# #########################################################################################################################
-#
-#
-#
-#
-# # %%
-#
-# def analyze_winback_timing(winback_subscriptions, df):
-#     """Analyse les délais de retour des winbacks"""
-#
-#     if len(winback_subscriptions) == 0:
-#         print("Aucun winback cette semaine.")
-#         return pd.DataFrame()
-#
-#     winback_analysis = []
-#
-#     for idx, winback in winback_subscriptions.iterrows():
-#         # CORRECTION : utiliser customer_id au lieu de customer_id_x
-#         customer_id = winback['customer_id']  # ← CHANGEMENT ICI
-#         previous_created = winback['previous_created']
-#         current_created = winback['created_utc']
-#
-#         # Calculer délai de retour
-#         time_away = (current_created - previous_created).days
-#
-#         winback_analysis.append({
-#             'customer_id': customer_id,
-#             'time_away_days': time_away,
-#             'previous_created': previous_created,
-#             'current_created': current_created,
-#             'time_away_months': round(time_away / 30.44, 1)  # Approximation mois
-#         })
-#
-#     winback_df = pd.DataFrame(winback_analysis)
-#
-#     print(f"\n📊 ANALYSE WINBACK TIMING ({len(winback_df)} clients):")
-#     print(f"Délai moyen de retour: {winback_df['time_away_days'].mean():.1f} jours ({winback_df['time_away_months'].mean():.1f} mois)")
-#     print(f"Délai médian: {winback_df['time_away_days'].median():.0f} jours ({winback_df['time_away_months'].median():.1f} mois)")
-#     print(f"Plus rapide: {winback_df['time_away_days'].min()} jours")
-#     print(f"Plus lent: {winback_df['time_away_days'].max()} jours ({winback_df['time_away_months'].max():.1f} mois)")
-#
-#     # Distribution par tranches
-#     bins = [0, 30, 90, 180, 365, float('inf')]
-#     labels = ['<1 mois', '1-3 mois', '3-6 mois', '6-12 mois', '>1 an']
-#     winback_df['time_category'] = pd.cut(winback_df['time_away_days'], bins=bins, labels=labels)
-#
-#     print(f"\n🗓️ DISTRIBUTION PAR PÉRIODE:")
-#     distribution = winback_df['time_category'].value_counts().sort_index()
-#     for category, count in distribution.items():
-#         percentage = (count / len(winback_df)) * 100
-#         print(f"  {category}: {count} clients ({percentage:.1f}%)")
-#
-#     return winback_df
-#
-# # Appelez cette fonction après votre analyse :
-#
-# def investigate_anomalies(anomaly_subscriptions, df):
-#     """
-#     Analyse approfondie des anomalies (direct subscriptions sans historique)
-#     """
-#     if len(anomaly_subscriptions) == 0:
-#         print("Aucune anomalie cette semaine.")
-#         return
-#
-#     print(f"\n🔍 INVESTIGATION DES {len(anomaly_subscriptions)} ANOMALIES:")
-#     print("=" * 60)
-#
-#     for idx, anomaly in anomaly_subscriptions.iterrows():
-#         customer_id = anomaly['customer_id']
-#         customer_name = anomaly['customer_name']
-#         created_utc = anomaly['created_utc']
-#         current_period_duration = anomaly['current_period_duration']
-#
-#         print(f"\n👤 {customer_name} ({customer_id})")
-#         print(f"   📅 Created: {created_utc}")
-#         print(f"   💰 Period: {current_period_duration} jours")
-#         print(f"   📊 Status: {anomaly['status']}")
-#
-#         # Vérifier s'il y a eu des erreurs de données
-#         customer_all_history = df[df['customer_id'] == customer_id]
-#         print(f"   📈 Total subscriptions: {len(customer_all_history)}")
-#
-#         # Analyser le pattern de nom/email
-#         if customer_name:
-#             # Chercher des noms similaires
-#             similar_names = df[df['customer_name'].str.contains(
-#                 customer_name.split()[0] if ' ' in customer_name else customer_name[:5], 
-#                 case=False, na=False
-#             )]['customer_name'].unique()
-#
-#             if len(similar_names) > 1:
-#                 print(f"   ⚠️  Noms similaires trouvés: {len(similar_names)} ({similar_names[:3]}...)")
-#
-#         # Vérifier timing suspect
-#         created_hour = created_utc.hour
-#         if created_hour < 6 or created_hour > 22:
-#             print(f"   🕐 Timing suspect: {created_hour}h (hors heures normales)")
-#
-#         # Comparer avec patterns normaux
-#         avg_period = df[(df['trial_duration'] == 0) & (~df['is_gifted_member'])]['current_period_duration'].median()
-#         if current_period_duration != avg_period:
-#             print(f"   📊 Durée anormale: {current_period_duration} jours (normal: {avg_period})")
-#
-#     print("\n" + "=" * 60)
-#
-#     return anomaly_subscriptions
-#
-# # Appelez cette fonction :
-#
-#
-#
-# week_dict, renewals = detailed_weekly_analysis(df, weeks_back=1, reference_date=today_date)
-# winback_timing = analyze_winback_timing(renewals['winback_subscriptions'], df)
-# investigate_anomalies(renewals['unknown_subscriptions'], df)
-#
-#
-# week_dict, renewals = detailed_weekly_analysis(df, weeks_back=2, reference_date=today_date)
-# winback_timing = analyze_winback_timing(renewals['winback_subscriptions'], df)
-# investigate_anomalies(renewals['unknown_subscriptions'], df)
-#
-#
-# week_dict, renewals = detailed_weekly_analysis(df, weeks_back=3, reference_date=today_date)
-# winback_timing = analyze_winback_timing(renewals['winback_subscriptions'], df)
-# investigate_anomalies(renewals['unknown_subscriptions'], df)
-#
-#
-# week_dict, renewals = detailed_weekly_analysis(df, weeks_back=4, reference_date=today_date)
-# winback_timing = analyze_winback_timing(renewals['winback_subscriptions'], df)
-# investigate_anomalies(renewals['unknown_subscriptions'], df)
-#
-#
-# def weekly_dashboard_summary(weeks_data):
-#     """
-#     Créer un dashboard comparatif des dernières semaines
-#     """
-#
-#     summary = []
-#     for week_data in weeks_data:
-#         summary.append({
-#             'week': week_data['year_week'],
-#             'new_subs': week_data['new_subscriptions'],
-#             'trialers': week_data['new_trialers'],
-#             'winbacks': week_data.get('winbacks', 0),
-#             'canceled_trial': week_data['new_canceled_during_trial'],
-#             'canceled_refund': week_data['new_canceled_during_refund'],
-#             'conversion_rate': round((week_data['new_trialers'] - week_data['new_canceled_during_trial']) / week_data['new_trialers'] * 100, 1) if week_data['new_trialers'] > 0 else 0,
-#             'refund_rate': round(week_data['new_canceled_during_refund'] / week_data['new_subscriptions'] * 100, 1)
-#         })
-#
-#     return pd.DataFrame(summary)
-#
-#
-# def analyze_stripe_date_patterns(df):
-#     """
-#     Analyse les patterns de dates pour comprendre le comportement de Stripe
-#     lors des renouvellements automatiques
-#     """
-#     print("🔍 ANALYSE DES PATTERNS DE DATES STRIPE")
-#     print("=" * 50)
-#
-#     # Filtrer les subscriptions sans trial et non-gifted
-#     no_trial_subs = df[(df['trial_duration'] == 0) & (~df['is_gifted_member'])].copy()
-#
-#     # Calculer les différences entre les dates clés
-#     no_trial_subs['created_to_start_hours'] = (
-#         no_trial_subs['start_utc'] - no_trial_subs['created_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     no_trial_subs['created_to_period_start_hours'] = (
-#         no_trial_subs['current_period_start_utc'] - no_trial_subs['created_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     no_trial_subs['start_to_period_start_hours'] = (
-#         no_trial_subs['current_period_start_utc'] - no_trial_subs['start_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     print(f"📊 ANALYSE SUR {len(no_trial_subs)} SUBSCRIPTIONS SANS TRIAL")
-#     print(f"\n🕐 DIFFÉRENCES TEMPORELLES:")
-#
-#     # Analyse created_utc vs start_utc
-#     print(f"Created → Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['created_to_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['created_to_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 24h: {(no_trial_subs['created_to_start_hours'].abs() < 24).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['created_to_start_hours'].mean():.2f}h")
-#
-#     # Analyse created_utc vs current_period_start_utc
-#     print(f"\nCreated → Period Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['created_to_period_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['created_to_period_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 24h: {(no_trial_subs['created_to_period_start_hours'].abs() < 24).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['created_to_period_start_hours'].mean():.2f}h")
-#
-#     # Analyse start_utc vs current_period_start_utc
-#     print(f"\nStart → Period Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['start_to_period_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['start_to_period_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 24h: {(no_trial_subs['start_to_period_start_hours'].abs() < 24).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['start_to_period_start_hours'].mean():.2f}h")
-#
-#     # Chercher des patterns suspects pour les renouvellements
-#     df_sorted = df.sort_values(['customer_id', 'created_utc'])
-#
-#     potential_renewals = []
-#     for idx, row in no_trial_subs.iterrows():
-#         customer_id = row['customer_id']
-#         current_created = row['created_utc']
-#
-#         # Historique du client
-#         customer_history = df_sorted[
-#             (df_sorted['customer_id'] == customer_id) & 
-#             (df_sorted['created_utc'] < current_created)
-#         ]
-#
-#         if len(customer_history) > 0:
-#             # Pattern suspect : created_utc très proche de current_period_start_utc
-#             # mais le client a un historique
-#             created_to_period_hours = abs(row['created_to_period_start_hours'])
-#
-#             if created_to_period_hours < 24:  # Moins de 24h de différence
-#                 last_sub = customer_history.iloc[-1]
-#
-#                 potential_renewals.append({
-#                     'customer_id': customer_id,
-#                     'current_created': current_created,
-#                     'current_period_start': row['current_period_start_utc'],
-#                     'hours_diff': created_to_period_hours,
-#                     'last_sub_created': last_sub['created_utc'],
-#                     'last_sub_canceled': last_sub['canceled_at_utc'],
-#                     'last_sub_ended': last_sub['ended_at_utc']
-#                 })
-#
-#     print(f"\n🚨 RENOUVELLEMENTS POTENTIELS DÉTECTÉS: {len(potential_renewals)}")
-#
-#     if len(potential_renewals) > 0:
-#         renewal_df = pd.DataFrame(potential_renewals)
-#         print(f"Répartition par écart temporel:")
-#         print(f"  - < 1h: {(renewal_df['hours_diff'] < 1).sum()}")
-#         print(f"  - 1-6h: {((renewal_df['hours_diff'] >= 1) & (renewal_df['hours_diff'] < 6)).sum()}")
-#         print(f"  - 6-24h: {((renewal_df['hours_diff'] >= 6) & (renewal_df['hours_diff'] < 24)).sum()}")
-#
-#         # Afficher quelques exemples
-#         print(f"\n📋 EXEMPLES (5 premiers):")
-#         for i, row in renewal_df.head().iterrows():
-#             print(f"  Client {row['customer_id']}: {row['hours_diff']:.1f}h d'écart")
-#
-#     return no_trial_subs, potential_renewals
-# analyze_stripe_date_patterns(df)
-#
-#
-#
-# def analyze_stripe_date_patterns(df):
-#     """
-#     Analyse les patterns de dates pour comprendre le comportement de Stripe
-#     lors des renouvellements automatiques
-#     """
-#     print("🔍 ANALYSE DES PATTERNS DE DATES STRIPE")
-#     print("=" * 50)
-#
-#     # Filtrer les subscriptions sans trial et non-gifted
-#     no_trial_subs = df[(df['trial_duration'] == 0) & (~df['is_gifted_member'])].copy()
-#
-#     # Calculer les différences entre les dates clés
-#     no_trial_subs['created_to_start_hours'] = (
-#         no_trial_subs['start_utc'] - no_trial_subs['created_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     no_trial_subs['created_to_period_start_hours'] = (
-#         no_trial_subs['current_period_start_utc'] - no_trial_subs['created_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     no_trial_subs['start_to_period_start_hours'] = (
-#         no_trial_subs['current_period_start_utc'] - no_trial_subs['start_utc']
-#     ).dt.total_seconds() / 3600
-#
-#     print(f"📊 ANALYSE SUR {len(no_trial_subs)} SUBSCRIPTIONS SANS TRIAL")
-#     print(f"\n🕐 DIFFÉRENCES TEMPORELLES:")
-#
-#     # Analyse created_utc vs start_utc
-#     print(f"Created → Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['created_to_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['created_to_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 8h: {(no_trial_subs['created_to_start_hours'].abs() < 8).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['created_to_start_hours'].mean():.2f}h")
-#
-#     # Analyse created_utc vs current_period_start_utc
-#     print(f"\nCreated → Period Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['created_to_period_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['created_to_period_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 8h: {(no_trial_subs['created_to_period_start_hours'].abs() < 8).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['created_to_period_start_hours'].mean():.2f}h")
-#
-#     # Analyse start_utc vs current_period_start_utc
-#     print(f"\nStart → Period Start:")
-#     print(f"  - Même moment (0h): {(no_trial_subs['start_to_period_start_hours'] == 0).sum()}")
-#     print(f"  - < 1h: {(no_trial_subs['start_to_period_start_hours'].abs() < 1).sum()}")
-#     print(f"  - < 8h: {(no_trial_subs['start_to_period_start_hours'].abs() < 8).sum()}")
-#     print(f"  - Moyenne: {no_trial_subs['start_to_period_start_hours'].mean():.2f}h")
-#
-#     # Chercher des patterns suspects pour les renouvellements
-#     df_sorted = df.sort_values(['customer_id', 'created_utc'])
-#
-#     potential_renewals = []
-#     for idx, row in no_trial_subs.iterrows():
-#         customer_id = row['customer_id']
-#         current_created = row['created_utc']
-#
-#         # Historique du client
-#         customer_history = df_sorted[
-#             (df_sorted['customer_id'] == customer_id) & 
-#             (df_sorted['created_utc'] < current_created)
-#         ]
-#
-#         if len(customer_history) > 0:
-#             # Pattern suspect : created_utc très proche de current_period_start_utc
-#             # mais le client a un historique
-#             created_to_period_hours = abs(row['created_to_period_start_hours'])
-#
-#             if created_to_period_hours < 8:  # Moins de 8h de différence
-#                 last_sub = customer_history.iloc[-1]
-#
-#                 potential_renewals.append({
-#                     'customer_id': customer_id,
-#                     'current_created': current_created,
-#                     'current_period_start': row['current_period_start_utc'],
-#                     'hours_diff': created_to_period_hours,
-#                     'last_sub_created': last_sub['created_utc'],
-#                     'last_sub_canceled': last_sub['canceled_at_utc'],
-#                     'last_sub_ended': last_sub['ended_at_utc']
-#                 })
-#
-#     print(f"\n🚨 RENOUVELLEMENTS POTENTIELS DÉTECTÉS: {len(potential_renewals)}")
-#
-#     if len(potential_renewals) > 0:
-#         renewal_df = pd.DataFrame(potential_renewals)
-#         print(f"Répartition par écart temporel:")
-#         print(f"  - < 1h: {(renewal_df['hours_diff'] < 1).sum()}")
-#         print(f"  - 1-8h: {((renewal_df['hours_diff'] >= 1) & (renewal_df['hours_diff'] < 8)).sum()}")
-#         print(f"  - 8h+: {(renewal_df['hours_diff'] >= 8).sum()}")
-#
-#         # Afficher quelques exemples
-#         print(f"\n📋 EXEMPLES (5 premiers):")
-#         for i, row in renewal_df.head().iterrows():
-#             print(f"  Client {row['customer_id']}: {row['hours_diff']:.1f}h d'écart")
-#
-#     return no_trial_subs, potential_renewals
-#
-#
-# def classify_no_trial_subscriptions(df):
-#     """
-#     Nouvelle logique de classification avec les règles mises à jour:
-#     1. Gift-to-Pay: A eu au moins 1 gift + subscription actuelle sans trial + pas gifted actuellement
-#     2. Renewal: Gap ≤ 1 jour OU détection via patterns Stripe
-#     3. Winback: Gap > 1 jour (peu importe si précédent était trial-only)
-#     4. Edge Case/Unknown: Tout le reste
-#     """
-#
-#     df_sorted = df.sort_values(['customer_id', 'created_utc'])
-#     no_trial_mask = (df['trial_duration'] == 0) & (~df['is_gifted_member'])
-#
-#     results = []
-#
-#     for idx, row in df[no_trial_mask].iterrows():
-#         customer_id = row['customer_id']
-#         current_created = row['created_utc']
-#         current_period_start = row['current_period_start_utc']
-#
-#         # Historique du client
-#         customer_history = df_sorted[
-#             (df_sorted['customer_id'] == customer_id) & 
-#             (df_sorted['created_utc'] < current_created)
-#         ]
-#
-#         # Détection Stripe renewal pattern
-#         created_to_period_hours = abs((current_period_start - current_created).total_seconds() / 3600)
-#         potential_stripe_renewal = (len(customer_history) > 0) and (created_to_period_hours <= 8)
-#
-#         if len(customer_history) == 0:
-#             # Aucun historique = première subscription
-#             classification = 'unknown'
-#             previous_status = None
-#             previous_created = None
-#             previous_canceled = None
-#             gap_days = None
-#             stripe_renewal_detected = False
-#
-#         else:
-#             last_subscription = customer_history.iloc[-1]
-#             previous_status = last_subscription['status']
-#             previous_created = last_subscription['created_utc']
-#             previous_canceled = last_subscription['canceled_at_utc']
-#             stripe_renewal_detected = potential_stripe_renewal
-#
-#             # 1. GIFT-TO-PAY : A eu au moins 1 gift dans l'historique
-#             had_gift = customer_history['is_gifted_member'].any()
-#
-#             if had_gift:
-#                 classification = 'gift_to_paid_winback'
-#                 gap_days = None if pd.isna(previous_canceled) else (current_created - previous_canceled).days
-#
-#             # 2. RENEWAL : Gap ≤ 1 jour OU pattern Stripe détecté
-#             elif (pd.notna(previous_canceled) and 
-#                   (current_created - previous_canceled).days <= 1) or potential_stripe_renewal:
-#                 classification = 'renewal'
-#                 gap_days = None if pd.isna(previous_canceled) else (current_created - previous_canceled).days
-#
-#             # 3. WINBACK : Gap > 1 jour
-#             elif (pd.notna(previous_canceled) and 
-#                   (current_created - previous_canceled).days > 1):
-#                 classification = 'winback'
-#                 gap_days = (current_created - previous_canceled).days
-#
-#             # 4. EDGE CASE/UNKNOWN
-#             else:
-#                 classification = 'unknown'
-#                 gap_days = None
-#
-#         results.append({
-#             'index': idx,
-#             'customer_id': customer_id,
-#             'classification': classification,
-#             'previous_status': previous_status,
-#             'previous_created': previous_created,
-#             'previous_canceled': previous_canceled,
-#             'gap_days': gap_days,
-#             'stripe_renewal_detected': stripe_renewal_detected,
-#             'created_to_period_hours': created_to_period_hours
-#         })
-#
-#     return pd.DataFrame(results)
-#
-#
-# def detailed_weekly_analysis(df, weeks_back=1, reference_date=None):
-#     """
-#     Version mise à jour de l'analyse hebdomadaire avec la nouvelle logique
-#     """
-#     if reference_date is None:
-#         reference_date = pd.Timestamp.now(tz='UTC')
-#
-#     week_info = get_specific_past_week(weeks_back=weeks_back, reference_date=reference_date)
-#     week_start = week_info['week_start']
-#     week_end = week_info['week_end']
-#
-#     print(f'🗓️  SEMAINE {week_info["year_week"]} (il y a {weeks_back} semaine{"s" if weeks_back > 1 else ""})')
-#     print(f'Du lundi {week_start.strftime("%d/%m")} au dimanche {week_end.strftime("%d/%m/%Y")}')
-#     print('=' * 60)
-#
-#     # NOUVELLES SUBSCRIPTIONS DE LA SEMAINE
-#     new_subscriptions = df[
-#         (df['created_utc'] >= week_start) &
-#         (df['created_utc'] <= week_end)
-#     ]
-#     len_new_subscriptions = len(new_subscriptions)
-#
-#     # TRIALERS
-#     new_trialers = new_subscriptions[new_subscriptions['trial_duration'] > 0]
-#     len_new_trialers = len(new_trialers)
-#
-#     # GIFTED
-#     new_gifted = new_subscriptions[new_subscriptions['is_gifted_member'] == True]
-#     len_new_gifted = len(new_gifted)
-#
-#     # CLASSIFICATION DES SUBSCRIPTIONS SANS TRIAL
-#     classification_results = classify_no_trial_subscriptions(df)
-#     weekly_no_trial = new_subscriptions[
-#         (new_subscriptions['trial_duration'] == 0) & 
-#         (~new_subscriptions['is_gifted_member'])
-#     ].copy()
-#
-#     if len(weekly_no_trial) == 0:
-#         len_renewals = len_winbacks = len_gift_to_paid = len_unknowns = 0
-#         len_stripe_renewals = 0
-#         renewal_subscriptions = winback_subscriptions = pd.DataFrame()
-#         gift_to_paid_subscriptions = unknown_subscriptions = pd.DataFrame()
-#     else:
-#         weekly_classified = weekly_no_trial.merge(
-#             classification_results, 
-#             left_index=True, 
-#             right_on='index', 
-#             how='left'
-#         )
-#         weekly_classified['classification'] = weekly_classified['classification'].fillna('unknown')
-#
-#         # Compter chaque catégorie
-#         len_renewals = (weekly_classified['classification'] == 'renewal').sum()
-#         len_winbacks = (weekly_classified['classification'] == 'winback').sum()
-#         len_gift_to_paid = (weekly_classified['classification'] == 'gift_to_paid_winback').sum()
-#         len_unknowns = (weekly_classified['classification'] == 'unknown').sum()
-#         len_stripe_renewals = (weekly_classified['stripe_renewal_detected'] == True).sum()
-#
-#         # Créer les DataFrames
-#         renewal_subscriptions = weekly_classified[weekly_classified['classification'] == 'renewal']
-#         winback_subscriptions = weekly_classified[weekly_classified['classification'] == 'winback']
-#         gift_to_paid_subscriptions = weekly_classified[weekly_classified['classification'] == 'gift_to_paid_winback']
-#         unknown_subscriptions = weekly_classified[weekly_classified['classification'] == 'unknown']
-#
-#     # AUTRES MÉTRIQUES
-#     new_canceled_during_trial = df[
-#         (df['canceled_during_trial'] == True) &
-#         (df['canceled_at_utc'].notna()) &
-#         (df['canceled_at_utc'] >= week_start) &
-#         (df['canceled_at_utc'] <= week_end)
-#     ]
-#     len_new_canceled_during_trial = len(new_canceled_during_trial)
-#
-#     new_canceled_during_refund = df[
-#         (df['canceled_during_refund_period'] == True) &
-#         (df['canceled_at_utc'].notna()) &
-#         (df['canceled_at_utc'] >= week_start) &
-#         (df['canceled_at_utc'] <= week_end)
-#     ]
-#     len_new_canceled_during_refund = len(new_canceled_during_refund)
-#
-#     new_full_members = df[
-#         (df['full_member'] == True) &
-#         (df['refund_period_end_utc'] >= week_start) &
-#         (df['refund_period_end_utc'] <= week_end)
-#     ]
-#     len_new_full_members = len(new_full_members)
-#
-#     # AFFICHAGE
-#     print(f"📈 {len_new_subscriptions} NOUVELLES SUBSCRIPTIONS")
-#     print(f"  ├─ 🎯 {len_new_trialers} Nouveaux Trialers")
-#     print(f"  ├─ 🎁 {len_new_gifted} Membres Offerts")
-#     print(f"  ├─ 🔄 {len_renewals} RENEWALS (renouvellements automatiques)")
-#     if len_stripe_renewals > 0:
-#         print(f"  │   └─ 🤖 {len_stripe_renewals} détectés via pattern Stripe")
-#     print(f"  ├─ 🔙 {len_winbacks} WINBACKS (clients de retour)")
-#     print(f"  ├─ 💝 {len_gift_to_paid} Gift-to-Paid (ex-cadeaux → payants)")
-#     print(f"  └─ ❓ {len_unknowns} INCONNUS")
-#     print()
-#     print(f"✅ {len_new_full_members} Devenus Membres Complets")
-#     print(f"❌ {len_new_canceled_during_trial} Annulations pendant trial")
-#     print(f"💔 {len_new_canceled_during_refund} Annulations pendant remboursement")
-#     print()
-#
-#     # Nettoyage des colonnes pour les DataFrames retournés
-#     def clean_merge_columns(df):
-#         if len(df) > 0 and 'customer_id_x' in df.columns:
-#             df = df.drop(['customer_id_y', 'index'], axis=1, errors='ignore')
-#             df = df.rename(columns={'customer_id_x': 'customer_id'})
-#         return df
-#
-#     renewal_subscriptions = clean_merge_columns(renewal_subscriptions)
-#     winback_subscriptions = clean_merge_columns(winback_subscriptions) 
-#     gift_to_paid_subscriptions = clean_merge_columns(gift_to_paid_subscriptions)
-#     unknown_subscriptions = clean_merge_columns(unknown_subscriptions)
-#
-#     # DICTIONNAIRE RÉSUMÉ
-#     week_dict = {
-#         'week_start': week_start, 'week_end': week_end, 'year_week': week_info['year_week'],
-#         'weeks_ago': week_info['weeks_ago'], 'new_subscriptions': len_new_subscriptions,
-#         'new_trialers': len_new_trialers, 'new_gifted': len_new_gifted,
-#         'renewals': len_renewals, 'winbacks': len_winbacks,
-#         'gift_to_paid_converters': len_gift_to_paid, 'unknowns': len_unknowns,
-#         'stripe_renewals_detected': len_stripe_renewals,
-#         'new_full_members': len_new_full_members,
-#         'new_canceled_during_trial': len_new_canceled_during_trial,
-#         'new_canceled_during_refund': len_new_canceled_during_refund
-#     }
-#
-#     # DONNÉES DÉTAILLÉES
-#     detailed_data = {
-#         'renewal_subscriptions': renewal_subscriptions,
-#         'winback_subscriptions': winback_subscriptions,
-#         'gift_to_paid_subscriptions': gift_to_paid_subscriptions,
-#         'unknown_subscriptions': unknown_subscriptions,
-#         'new_gifted': new_gifted,
-#         'new_trialers': new_trialers
-#     }
-#
-#     return week_dict, detailed_data
-#
-#
-# # FONCTION D'UTILISATION
-# def test_new_classification(df, reference_date):
-#     """
-#     Teste la nouvelle classification et compare avec l'ancienne si nécessaire
-#     """
-#     print("🧪 TEST DE LA NOUVELLE CLASSIFICATION")
-#     print("=" * 50)
-#
-#     # 1. Analyse des patterns de dates
-#     date_analysis, potential_renewals = analyze_stripe_date_patterns(df)
-#
-#     print("\n" + "=" * 50)
-#
-#     # 2. Test sur les 4 dernières semaines
-#     for week in range(1, 5):
-#         week_dict, detailed_data = detailed_weekly_analysis(df, weeks_back=week, reference_date=reference_date)
-#
-#         # Analyse rapide des winbacks s'il y en a
-#         if len(detailed_data['winback_subscriptions']) > 0:
-#             winback_timing = analyze_winback_timing(detailed_data['winback_subscriptions'], df)
-#
-#     return date_analysis, potential_renewals
+def create_customer_journey_analysis_fast(df):
+    """
+    Fast customer journey analysis using groupby operations
+    """
+    print("\n🛤️ FAST CUSTOMER JOURNEY ANALYSIS")
+    print("=" * 40)
+    
+    # Check what columns actually exist in your DataFrame
+    print(f"🔍 Available columns: {list(df.columns)}")
+    
+    # Check what columns exist and create aggregation dict accordingly
+    agg_dict = {
+        'created': ['min', 'max', 'count'],
+        'status': lambda x: list(x),
+    }
+    
+    # Add optional columns if they exist (using your actual column names)
+    if 'trial_start' in df.columns:
+        agg_dict['trial_start'] = 'count'
+    if 'canceled_at' in df.columns:
+        agg_dict['canceled_at'] = 'count'
+    
+    # Check for gift column - could be is_gift, is_gifted_member, etc.
+    gift_column = None
+    for col in ['is_gift', 'is_gifted_member', 'gift']:
+        if col in df.columns:
+            gift_column = col
+            agg_dict[col] = 'any'
+            break
+    
+    # Group by customer for vectorized analysis
+    customer_stats = df.groupby('customer_id').agg(agg_dict).reset_index()
+    
+    # Flatten column names based on what we actually have
+    base_columns = ['customer_id', 'first_subscription', 'last_subscription', 'subscription_count', 'status_history']
+    
+    new_columns = base_columns.copy()
+    
+    if 'trial_start' in df.columns:
+        new_columns.append('trial_count')
+    if 'canceled_at' in df.columns:
+        new_columns.append('cancellation_count')
+    if gift_column:
+        new_columns.append('ever_had_gift')
+    
+    customer_stats.columns = new_columns
+    
+    # Add missing columns with defaults if they don't exist
+    if 'trial_count' not in customer_stats.columns:
+        customer_stats['trial_count'] = 0
+    if 'cancellation_count' not in customer_stats.columns:
+        customer_stats['cancellation_count'] = 0
+    if 'ever_had_gift' not in customer_stats.columns:
+        customer_stats['ever_had_gift'] = False
+    
+    # Calculate total lifetime days manually (much simpler than trying to use non-existent column)
+    customer_stats['total_lifetime_days'] = (
+        customer_stats['last_subscription'] - customer_stats['first_subscription']
+    ).dt.days
+    
+    # Classify journey types
+    customer_stats['journey_type'] = np.select([
+        customer_stats['subscription_count'] == 1,
+        (customer_stats['subscription_count'] == 2) & customer_stats['ever_had_gift'],
+        customer_stats['subscription_count'] >= 2
+    ], [
+        'Continuous',
+        'Gift→Upgrade', 
+        'Churn→Return'
+    ], default='Complex')
+    
+    # Calculate customer lifetime (same as total_lifetime_days, keeping for compatibility)
+    customer_stats['customer_lifetime_days'] = customer_stats['total_lifetime_days']
+    
+    print(f"📊 Customer journey distribution:")
+    print(customer_stats['journey_type'].value_counts())
+    
+    return customer_stats
+
+def create_cohort_analysis_fast(df):
+    """
+    Fast cohort analysis using pandas operations
+    """
+    print("\n👥 FAST COHORT ANALYSIS")
+    print("=" * 30)
+    
+    # Create cohort based on first subscription week
+    df['cohort_week'] = df['created'].dt.to_period('W-MON')
+    
+    # Check what columns actually exist and build aggregation dynamically
+    agg_dict = {
+        'created': 'count',
+        'canceled_at': lambda x: x.notna().sum(),
+        'status': lambda x: (x == 'active').sum(),
+    }
+    
+    # Add trial columns if they exist
+    if 'trial_start' in df.columns:
+        agg_dict['trial_start'] = 'count'
+    
+    # Add derived columns if they exist (these are created in add_subscription_phases)
+    if 'trial_converted' in df.columns:
+        agg_dict['trial_converted'] = 'sum'
+    if 'trial_canceled' in df.columns:
+        agg_dict['trial_canceled'] = 'sum'
+    
+    # Add gift column (check multiple possible names)
+    gift_column = None
+    for col in ['is_gift', 'is_gifted_member']:
+        if col in df.columns:
+            gift_column = col
+            agg_dict[col] = 'sum'
+            break
+    
+    # Aggregate by cohort
+    cohort_metrics = df.groupby('cohort_week').agg(agg_dict).reset_index()
+    
+    # Build column names based on what we actually aggregated
+    new_columns = ['cohort_week', 'cohort_size', 'total_cancellations', 'currently_active']
+    
+    if 'trial_start' in df.columns:
+        new_columns.insert(2, 'trial_signups')
+    if 'trial_converted' in df.columns:
+        new_columns.append('trial_conversions')
+    if 'trial_canceled' in df.columns:
+        new_columns.append('trial_cancellations')
+    if gift_column:
+        new_columns.append('gift_subscriptions')
+    
+    # Handle column assignment safely
+    expected_cols = len(new_columns)
+    actual_cols = len(cohort_metrics.columns)
+    
+    if expected_cols == actual_cols:
+        cohort_metrics.columns = new_columns
+    else:
+        # Fallback: keep original column names and add prefixes
+        print(f"⚠️ Column mismatch: expected {expected_cols}, got {actual_cols}")
+        print(f"Keeping original columns: {list(cohort_metrics.columns)}")
+    
+    # Add missing columns with defaults
+    required_columns = ['trial_signups', 'trial_conversions', 'trial_cancellations', 'gift_subscriptions']
+    for col in required_columns:
+        if col not in cohort_metrics.columns:
+            cohort_metrics[col] = 0
+    
+    # Calculate rates (with safe division)
+    cohort_metrics['trial_conversion_rate'] = np.where(
+        cohort_metrics['trial_signups'] > 0,
+        cohort_metrics['trial_conversions'] / cohort_metrics['trial_signups'] * 100,
+        0
+    )
+    
+    cohort_metrics['retention_rate'] = np.where(
+        cohort_metrics['cohort_size'] > 0,
+        cohort_metrics['currently_active'] / cohort_metrics['cohort_size'] * 100,
+        0
+    )
+    
+    cohort_metrics['cohort_week_str'] = cohort_metrics['cohort_week'].astype(str)
+    
+    print(f"📈 Analyzed {len(cohort_metrics)} cohorts")
+    if len(cohort_metrics) > 0:
+        print(f"📊 Average cohort size: {cohort_metrics['cohort_size'].mean():.1f}")
+    
+    return cohort_metrics
+
+def create_summary_export(df, weekly_df, filename):
+    """
+    Create a summary CSV with key insights
+    """
+    
+    # Overall metrics
+    total_customers = df['customer_id'].nunique()
+    total_subscriptions = len(df)
+    active_subscriptions = len(df[df['status'] == 'active'])
+    trial_conversion_rate = df[df['is_trial_subscription']]['trial_converted'].mean() * 100
+    
+    # Recent performance (last 4 weeks)
+    recent_weeks = weekly_df.tail(4)
+    avg_weekly_signups = recent_weeks['new_subscriptions'].mean()
+    avg_weekly_conversions = recent_weeks['trial_conversions'].mean()
+    
+    # Growth metrics
+    if len(weekly_df) >= 2:
+        growth_rate = ((weekly_df.iloc[-1]['active_subscriptions_end'] / 
+                       weekly_df.iloc[0]['active_subscriptions_end']) - 1) * 100
+    else:
+        growth_rate = 0
+    
+    summary_data = {
+        'Metric': [
+            'Total Customers',
+            'Total Subscriptions', 
+            'Active Subscriptions',
+            'Trial Conversion Rate (%)',
+            'Avg Weekly Signups (Last 4 weeks)',
+            'Avg Weekly Conversions (Last 4 weeks)',
+            'Overall Growth Rate (%)',
+            'Analysis Date',
+            'Weeks Analyzed'
+        ],
+        'Value': [
+            total_customers,
+            total_subscriptions,
+            active_subscriptions,
+            f"{trial_conversion_rate:.1f}%",
+            f"{avg_weekly_signups:.1f}",
+            f"{avg_weekly_conversions:.1f}",
+            f"{growth_rate:.1f}%",
+            pd.Timestamp.now().strftime('%Y-%m-%d'),
+            len(weekly_df)
+        ]
+    }
+    
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_csv(filename, index=False)
+
+def run_optimized_analysis(df, today_date, export_csv=True):
+    """
+    Run the complete optimized analysis pipeline
+    """
+    print("🚀 OPTIMIZED SUBSCRIPTION ANALYSIS PIPELINE")
+    print("=" * 60)
+    
+    start_time = pd.Timestamp.now()
+    
+    # 1. Fast weekly analysis (this also creates derived columns)
+    weekly_df = fast_weekly_analysis_from_csv(df, today_date, export_csv)
+    
+    # 2. Fast customer journey analysis (uses original df)
+    customer_journeys = create_customer_journey_analysis_fast(df)
+    
+    # 3. Fast cohort analysis (also uses original df - we'll calculate what we can)
+    cohort_analysis = create_cohort_analysis_fast(df)
+    
+    # Export additional analyses if requested
+    if export_csv:
+        customer_journeys.to_csv(f"customer_journeys_{today_date.strftime('%Y%m%d')}.csv", index=False)
+        cohort_analysis.to_csv(f"cohort_analysis_{today_date.strftime('%Y%m%d')}.csv", index=False)
+        print(f"💾 Customer journeys exported to: customer_journeys_{today_date.strftime('%Y%m%d')}.csv")
+        print(f"💾 Cohort analysis exported to: cohort_analysis_{today_date.strftime('%Y%m%d')}.csv")
+    
+    end_time = pd.Timestamp.now()
+    processing_time = (end_time - start_time).total_seconds()
+    
+    print(f"\n⚡ PERFORMANCE:")
+    print(f"   • Processing time: {processing_time:.1f} seconds")
+    print(f"   • Weeks processed: {len(weekly_df)}")
+    print(f"   • Speed: {len(weekly_df)/processing_time:.1f} weeks/second")
+    
+    print(f"\n📊 RESULTS SUMMARY:")
+    print(f"   • Weekly metrics: {len(weekly_df)} weeks")
+    print(f"   • Customer journeys: {len(customer_journeys)} customers")
+    print(f"   • Cohorts analyzed: {len(cohort_analysis)} cohorts")
+    
+    # Show some key insights
+    print(f"\n🎯 KEY INSIGHTS:")
+    print(f"   • Total subscriptions: {len(df)}")
+    print(f"   • Unique customers: {df['customer_id'].nunique()}")
+    print(f"   • Current active: {len(df[df['status'] == 'active'])}")
+    print(f"   • Customer types: {customer_journeys['journey_type'].value_counts().to_dict()}")
+    
+    return {
+        'weekly_analysis': weekly_df,
+        'customer_journeys': customer_journeys,
+        'cohort_analysis': cohort_analysis,
+        'processing_time_seconds': processing_time
+    }
+
+# Usage:
+results = run_optimized_analysis(df, today_date, export_csv=True)
+
+def create_corrected_dashboard(df, today_date, export_path="corrected_subscription_dashboard.png"):
+    """
+    Create a corrected comprehensive dashboard with fixed business logic
+    """
+    
+    print("🔧 CREATING CORRECTED DASHBOARD WITH FIXED LOGIC")
+    print("=" * 60)
+    
+    # Debug current data first
+    debug_data_issues(df, today_date)
+    
+    # Prepare data with corrected business logic
+    df_processed = prepare_corrected_data(df, today_date)
+    
+    # Generate corrected weekly analysis
+    weekly_metrics = generate_corrected_weekly_metrics(df_processed, today_date)
+    
+    # Create the dashboard with better spacing
+    fig = plt.figure(figsize=(24, 18))
+    gs = fig.add_gridspec(4, 3, hspace=0.4, wspace=0.3, 
+                         height_ratios=[1, 1, 1, 0.6], width_ratios=[1, 1, 1])
+    
+    # Convert week_start to datetime for plotting
+    weekly_metrics['week_date'] = pd.to_datetime(weekly_metrics['week_start'])
+    
+    # Color scheme
+    colors = {
+        'primary': '#2E86AB',
+        'secondary': '#A23B72', 
+        'success': '#27AE60',
+        'warning': '#F39C12',
+        'danger': '#E74C3C',
+        'info': '#8E44AD'
+    }
+    
+    # 1. FULL MEMBERS GROWTH (Top Left) - CORRECTED
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(weekly_metrics['week_date'], weekly_metrics['full_members_at_start'], 
+             linewidth=3, color=colors['primary'], marker='o', markersize=2)
+    ax1.set_title('Full Members Growth\n(Corrected)', fontsize=12, fontweight='bold', pad=15)
+    ax1.set_ylabel('Full Members Count', fontsize=10)
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # Add trend line
+    if len(weekly_metrics) > 1:
+        z = np.polyfit(range(len(weekly_metrics)), weekly_metrics['full_members_at_start'], 1)
+        p = np.poly1d(z)
+        ax1.plot(weekly_metrics['week_date'], p(range(len(weekly_metrics))), 
+                 "--", alpha=0.7, color=colors['secondary'], linewidth=2)
+    
+    # 2. WEEKLY NEW VS CHURNED MEMBERS (Top Center) - CORRECTED
+    ax2 = fig.add_subplot(gs[0, 1])
+    width = pd.Timedelta(days=2)
+    ax2.bar(weekly_metrics['week_date'] - width/2, weekly_metrics['new_full_members'], 
+            width=width, label='New Full Members', color=colors['success'], alpha=0.8)
+    ax2.bar(weekly_metrics['week_date'] + width/2, weekly_metrics['churned_full_members'], 
+            width=width, label='Churned Members', color=colors['danger'], alpha=0.8)
+    ax2.set_title('Weekly New vs Churned\nFull Members (Corrected)', fontsize=12, fontweight='bold', pad=15)
+    ax2.set_ylabel('Members Count', fontsize=10)
+    ax2.legend(fontsize=9)
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 3. TRIAL SIGNUPS & CONVERSIONS (Top Right) - CORRECTED
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax3.bar(weekly_metrics['week_date'], weekly_metrics['trial_signups'], 
+            width=pd.Timedelta(days=4), label='Trial Signups', color=colors['info'], alpha=0.7)
+    ax3.bar(weekly_metrics['week_date'], weekly_metrics['trial_conversions'], 
+            width=pd.Timedelta(days=4), label='Trial Conversions', color=colors['success'], alpha=0.9)
+    ax3.set_title('Weekly Trial Signups\nvs Conversions (Corrected)', fontsize=12, fontweight='bold', pad=15)
+    ax3.set_ylabel('Count', fontsize=10)
+    ax3.legend(fontsize=9)
+    ax3.grid(True, alpha=0.3)
+    ax3.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 4. CONVERSION RATE TRENDS (Second Row Left) - CORRECTED
+    ax4 = fig.add_subplot(gs[1, 0])
+    # Apply smoothing to reduce noise
+    conversion_rate_smooth = weekly_metrics['trial_conversion_rate'].rolling(window=4, min_periods=1).mean()
+    ax4.plot(weekly_metrics['week_date'], conversion_rate_smooth, 
+             linewidth=3, color=colors['warning'], marker='o', markersize=2)
+    ax4.set_title('Trial → Full Member\nConversion Rate (4-week MA)', fontsize=12, fontweight='bold', pad=15)
+    ax4.set_ylabel('Conversion Rate (%)', fontsize=10)
+    ax4.grid(True, alpha=0.3)
+    ax4.tick_params(axis='x', rotation=45, labelsize=8)
+    ax4.set_ylim(0, 100)  # Cap at 100%
+    
+    # Add average line
+    avg_conversion = weekly_metrics['trial_conversion_rate'].mean()
+    ax4.axhline(y=avg_conversion, color=colors['danger'], linestyle='--', alpha=0.7, 
+                label=f'Average: {avg_conversion:.1f}%')
+    ax4.legend(fontsize=9)
+    
+    # 5. TRIAL CANCELLATIONS & REFUNDS (Second Row Center) - CORRECTED
+    ax5 = fig.add_subplot(gs[1, 1])
+    ax5.bar(weekly_metrics['week_date'] - width/2, weekly_metrics['trial_cancellations'], 
+            width=width, label='Trial Cancellations', color=colors['danger'], alpha=0.7)
+    ax5.bar(weekly_metrics['week_date'] + width/2, weekly_metrics['refund_requests'], 
+            width=width, label='Refund Requests', color=colors['warning'], alpha=0.7)
+    ax5.set_title('Weekly Trial Cancellations\n& Refund Requests', fontsize=12, fontweight='bold', pad=15)
+    ax5.set_ylabel('Count', fontsize=10)
+    ax5.legend(fontsize=9)
+    ax5.grid(True, alpha=0.3)
+    ax5.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 6. NET GROWTH (Second Row Right) - CORRECTED
+    ax6 = fig.add_subplot(gs[1, 2])
+    net_growth = weekly_metrics['new_full_members'] - weekly_metrics['churned_full_members']
+    colors_net = [colors['success'] if x >= 0 else colors['danger'] for x in net_growth]
+    ax6.bar(weekly_metrics['week_date'], net_growth, 
+            width=pd.Timedelta(days=4), color=colors_net, alpha=0.7)
+    ax6.set_title('Weekly Net Growth\n(New - Churned)', fontsize=12, fontweight='bold', pad=15)
+    ax6.set_ylabel('Net Members', fontsize=10)
+    ax6.axhline(y=0, color='black', linestyle='-', alpha=0.5)
+    ax6.grid(True, alpha=0.3)
+    ax6.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 7. YEARLY RENEWAL ANALYSIS (Third Row Left) - CORRECTED
+    ax7 = fig.add_subplot(gs[2, 0])
+    if weekly_metrics['year1_completions'].sum() > 0:
+        ax7.bar(weekly_metrics['week_date'] - width/2, weekly_metrics['year1_completions'], 
+                width=width, label='Year 1 Completions', color=colors['success'], alpha=0.8)
+        ax7.bar(weekly_metrics['week_date'] + width/2, weekly_metrics['year1_cancellations'], 
+                width=width, label='Year 1 Cancellations', color=colors['danger'], alpha=0.8)
+        ax7.set_title('Year 1 → Year 2\nRenewal Analysis', fontsize=12, fontweight='bold', pad=15)
+        ax7.set_ylabel('Count', fontsize=10)
+        ax7.legend(fontsize=9)
+    else:
+        # Show what data we do have
+        total_year1_eligible = len(df_processed[df_processed['subscription_age_days'] >= 365])
+        ax7.text(0.5, 0.5, f'Year 1 → Year 2 Renewal Analysis\n\n{total_year1_eligible} customers have\nreached 1+ year\n\nNeed more time-series data\nfor weekly renewal tracking', 
+                ha='center', va='center', transform=ax7.transAxes, fontsize=10,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
+        ax7.set_title('Year 1 → Year 2\nRenewal Analysis', fontsize=12, fontweight='bold', pad=15)
+    ax7.grid(True, alpha=0.3)
+    ax7.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 8. CUMULATIVE METRICS (Third Row Center) - CORRECTED
+    ax8 = fig.add_subplot(gs[2, 1])
+    ax8.plot(weekly_metrics['week_date'], weekly_metrics['trial_signups'].cumsum(), 
+             linewidth=3, color=colors['info'], label='Cumulative Trials', marker='o', markersize=2)
+    ax8.plot(weekly_metrics['week_date'], weekly_metrics['trial_conversions'].cumsum(), 
+             linewidth=3, color=colors['success'], label='Cumulative Conversions', marker='s', markersize=2)
+    ax8.set_title('Cumulative Trial Signups\n& Conversions', fontsize=12, fontweight='bold', pad=15)
+    ax8.set_ylabel('Cumulative Count', fontsize=10)
+    ax8.legend(fontsize=9)
+    ax8.grid(True, alpha=0.3)
+    ax8.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # 9. REFUND RATE TRENDS (Third Row Right) - CORRECTED WITH CAP
+    ax9 = fig.add_subplot(gs[2, 2])
+    # Fixed refund rate calculation with reasonable cap
+    refund_rate = np.where(
+        weekly_metrics['new_full_members'] > 0,
+        np.minimum(weekly_metrics['refund_requests'] / weekly_metrics['new_full_members'] * 100, 100),
+        0
+    )
+    ax9.plot(weekly_metrics['week_date'], refund_rate, 
+             linewidth=3, color=colors['warning'], marker='o', markersize=2)
+    ax9.set_title('Weekly Refund Rate\n(Capped at 100%)', fontsize=12, fontweight='bold', pad=15)
+    ax9.set_ylabel('Refund Rate (%)', fontsize=10)
+    ax9.set_ylim(0, 100)  # Cap at reasonable level
+    ax9.grid(True, alpha=0.3)
+    ax9.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # Add average line
+    avg_refund_rate = refund_rate[refund_rate > 0].mean()
+    if not np.isnan(avg_refund_rate):
+        ax9.axhline(y=avg_refund_rate, color=colors['danger'], linestyle='--', alpha=0.7, 
+                    label=f'Average: {avg_refund_rate:.1f}%')
+        ax9.legend(fontsize=9)
+    
+    # 10. CORRECTED KEY METRICS SUMMARY (Bottom Row)
+    ax10 = fig.add_subplot(gs[3, :])
+    ax10.axis('off')
+    
+    # Calculate corrected summary metrics
+    total_customers = df_processed['customer_id'].nunique()
+    total_subscriptions = len(df_processed)
+    current_full_members = weekly_metrics['full_members_at_start'].iloc[-1] if len(weekly_metrics) > 0 else 0
+    total_trials = weekly_metrics['trial_signups'].sum()
+    total_conversions = weekly_metrics['trial_conversions'].sum()
+    total_churned = weekly_metrics['churned_full_members'].sum()
+    total_refunds = weekly_metrics['refund_requests'].sum()
+    
+    overall_conversion_rate = (total_conversions / total_trials * 100) if total_trials > 0 else 0
+    avg_conversion_rate = weekly_metrics['trial_conversion_rate'].mean()
+    
+    # Growth calculation
+    if len(weekly_metrics) >= 2:
+        first_week_members = weekly_metrics['full_members_at_start'].iloc[0]
+        growth_rate = ((current_full_members - first_week_members) / first_week_members * 100) if first_week_members > 0 else 0
+    else:
+        growth_rate = 0
+    
+    # Churn rate
+    total_ever_full_members = len(df_processed[df_processed['ever_was_full_member'] == True])
+    churn_rate = (total_churned / total_ever_full_members * 100) if total_ever_full_members > 0 else 0
+    
+    # Create corrected summary text with better formatting
+    summary_text = f"""CORRECTED KEY METRICS SUMMARY (Sept 2023 - May 2025)
+
+CUSTOMER BASE:  {total_customers:,} unique customers  |  {total_subscriptions:,} total subscriptions  |  {current_full_members:,} current full members
+
+TRIAL PERFORMANCE:  {total_trials:,} trial signups  |  {total_conversions:,} conversions  |  {overall_conversion_rate:.1f}% overall conversion rate
+
+GROWTH & RETENTION:  {growth_rate:+.1f}% full member growth since Sept 2023  |  {avg_conversion_rate:.1f}% average weekly conversion
+
+CHURN ANALYSIS:  {total_churned:,} total churned members  |  {churn_rate:.1f}% historical churn rate  |  {total_refunds:,} total refund requests"""
+    
+    ax10.text(0.5, 0.5, summary_text, ha='center', va='center', 
+              transform=ax10.transAxes, fontsize=12, 
+              bbox=dict(boxstyle="round,pad=0.4", facecolor="lightgreen", alpha=0.1))
+    
+    # Add title and subtitle with better spacing
+    fig.suptitle('CORRECTED SUBSCRIPTION ANALYTICS DASHBOARD', 
+                fontsize=20, fontweight='bold', y=0.97)
+    fig.text(0.5, 0.94, f'Analysis Period: September 2023 - May 2025  |  Generated: {datetime.now().strftime("%B %d, %Y")} | FIXED LOGIC',
+             ha='center', fontsize=12, style='italic', color='green')
+    
+    # Save the dashboard
+    plt.savefig(export_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+    print(f"💾 Corrected dashboard exported to: {export_path}")
+    
+    # Show the plot
+    plt.show()
+    
+    return fig, weekly_metrics
+
+def debug_data_issues(df, today_date):
+    """
+    Debug the data issues found in the original dashboard
+    """
+    print("🔍 DEBUGGING DATA ISSUES")
+    print("=" * 40)
+    
+    # Check subscription statuses
+    print("📊 Subscription status distribution:")
+    print(df['status'].value_counts())
+    
+    # Check cancellation data
+    canceled_count = len(df[df['canceled_at'].notna()])
+    ended_count = len(df[df['ended_at'].notna()])
+    print(f"\n❌ Cancellation data:")
+    print(f"   • Subscriptions with canceled_at: {canceled_count:,}")
+    print(f"   • Subscriptions with ended_at: {ended_count:,}")
+    
+    # Check trial data
+    trial_count = len(df[df['trial_start'].notna()])
+    print(f"\n🧪 Trial data:")
+    print(f"   • Subscriptions with trials: {trial_count:,}")
+    
+    # Check gift data
+    gift_count = len(df[df['is_gifted_member'] == True])
+    print(f"\n🎁 Gift data:")
+    print(f"   • Gift subscriptions: {gift_count:,}")
+    
+    # Check date ranges
+    print(f"\n📅 Date ranges:")
+    print(f"   • Created: {df['created'].min()} to {df['created'].max()}")
+    if 'canceled_at' in df.columns:
+        valid_canceled = df['canceled_at'].dropna()
+        if len(valid_canceled) > 0:
+            print(f"   • Canceled: {valid_canceled.min()} to {valid_canceled.max()}")
+
+def prepare_corrected_data(df, today_date):
+    """
+    Prepare data with corrected business logic
+    """
+    print("\n⚡ APPLYING CORRECTED BUSINESS LOGIC")
+    print("=" * 45)
+    
+    df = df.copy()
+    
+    # Ensure date columns are datetime
+    date_cols = ['created', 'trial_start', 'trial_end', 'canceled_at', 'ended_at']
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], utc=True)
+    
+    # Handle gift members properly
+    df['is_gift'] = df['is_gifted_member'].fillna(False).astype(bool)
+    
+    # Calculate when paying membership starts (key correction)
+    df['paying_start_date'] = np.where(
+        df['trial_end'].notna(),
+        df['trial_end'],  # After trial completion
+        df['created']     # Immediate for non-trial
+    )
+    
+    # Trial analysis (corrected)
+    df['had_trial'] = df['trial_start'].notna()
+    
+    # CORRECTED: Trial conversion logic
+    df['trial_converted'] = (
+        df['had_trial'] &
+        (
+            # Either never canceled, OR canceled after trial ended
+            (df['canceled_at'].isna()) |
+            (df['canceled_at'] > df['trial_end'])
+        ) &
+        # And trial actually ended (not ongoing)
+        (df['trial_end'] <= today_date)
+    )
+    
+    # CORRECTED: Trial cancellation logic
+    df['trial_canceled'] = (
+        df['had_trial'] &
+        df['canceled_at'].notna() &
+        (df['canceled_at'] <= df['trial_end'])
+    )
+    
+    # CORRECTED: Refund period calculation (14 days after becoming paying customer)
+    df['refund_period_end'] = df['paying_start_date'] + pd.Timedelta(days=14)
+    
+    # CORRECTED: Refund request logic
+    df['requested_refund'] = (
+        df['canceled_at'].notna() &
+        (df['canceled_at'] <= df['refund_period_end']) &
+        (df['canceled_at'] > df['paying_start_date'])  # Must be after becoming paying customer
+    )
+    
+    # CORRECTED: Full member definition
+    df['is_full_member'] = (
+        (df['status'] == 'active') &
+        (~df['is_gift']) &
+        (df['paying_start_date'] + pd.Timedelta(days=14) <= today_date)  # Past refund period
+    )
+    
+    # Track who was ever a full member (for churn calculation)
+    df['ever_was_full_member'] = (
+        (~df['is_gift']) &
+        (
+            (df['status'] == 'active') |  # Currently active
+            (df['canceled_at'] > df['paying_start_date'] + pd.Timedelta(days=14))  # Was active past refund period
+        )
+    )
+    
+    # CORRECTED: Churn definition - was full member and then canceled/ended
+    df['churned_full_member'] = (
+        df['ever_was_full_member'] &
+        (
+            (df['status'] == 'canceled') |
+            (df['ended_at'].notna())
+        )
+    )
+    
+    # Year analysis
+    df['subscription_age_days'] = (today_date - df['paying_start_date']).dt.days
+    df['completed_year_1'] = df['subscription_age_days'] >= 365
+    
+    # Year 2 analysis
+    year_2_start = df['paying_start_date'] + pd.Timedelta(days=365)
+    year_2_refund_end = year_2_start + pd.Timedelta(days=14)
+    
+    df['year_2_refund'] = (
+        df['completed_year_1'] &
+        df['canceled_at'].notna() &
+        (df['canceled_at'] >= year_2_start) &
+        (df['canceled_at'] <= year_2_refund_end)
+    )
+    
+    df['canceled_during_year_1'] = (
+        df['canceled_at'].notna() &
+        (df['canceled_at'] < year_2_start) &
+        (df['canceled_at'] > df['paying_start_date'])
+    )
+    
+    print(f"✅ Data prepared:")
+    print(f"   • Total subscriptions: {len(df):,}")
+    print(f"   • Current full members: {df['is_full_member'].sum():,}")
+    print(f"   • Ever full members: {df['ever_was_full_member'].sum():,}")
+    print(f"   • Churned full members: {df['churned_full_member'].sum():,}")
+    print(f"   • Trial conversions: {df['trial_converted'].sum():,}")
+    
+    return df
+
+def generate_corrected_weekly_metrics(df, today_date):
+    """
+    Generate corrected weekly metrics with proper business logic
+    """
+    print("\n📊 GENERATING CORRECTED WEEKLY METRICS")
+    print("=" * 45)
+    
+    # Generate weekly periods
+    start_date = df['created'].min().normalize()
+    end_date = today_date.normalize()
+    week_starts = pd.date_range(start_date, end_date, freq='W-MON')
+    
+    weekly_results = []
+    
+    for i, week_start in enumerate(week_starts):
+        week_end = week_start + pd.Timedelta(days=6, hours=23, minutes=59, seconds=59)
+        
+        if i % 20 == 0:  # Progress indicator
+            print(f"   Processing week {i+1}/{len(week_starts)}: {week_start.strftime('%Y-%m-%d')}")
+        
+        # 1. CORRECTED: Full members at start of week
+        full_members_at_start = len(df[
+            (df['paying_start_date'] + pd.Timedelta(days=14) < week_start) &  # Became full member before week
+            (df['is_full_member'] | df['ever_was_full_member']) &  # Is or was full member
+            (
+                (df['canceled_at'].isna()) |  # Never canceled OR
+                (df['canceled_at'] >= week_start)  # Canceled after/during this week
+            )
+        ])
+        
+        # 2. CORRECTED: New full members during week (completed refund period)
+        new_full_members = len(df[
+            (df['paying_start_date'] + pd.Timedelta(days=14) >= week_start) &
+            (df['paying_start_date'] + pd.Timedelta(days=14) <= week_end) &
+            (df['ever_was_full_member'] == True)
+        ])
+        
+        # 3. CORRECTED: Churned full members during week
+        churned_full_members = len(df[
+            (
+                (df['canceled_at'] >= week_start) & (df['canceled_at'] <= week_end)
+            ) |
+            (
+                (df['ended_at'] >= week_start) & (df['ended_at'] <= week_end)
+            ) &
+            (df['ever_was_full_member'] == True)
+        ])
+        
+        # 4. Trial signups during week
+        trial_signups = len(df[
+            (df['trial_start'] >= week_start) &
+            (df['trial_start'] <= week_end)
+        ])
+        
+        # 5. Trial conversions during week (trial ended and converted)
+        trial_conversions = len(df[
+            (df['trial_end'] >= week_start) &
+            (df['trial_end'] <= week_end) &
+            (df['trial_converted'] == True)
+        ])
+        
+        # 6. Trial cancellations during week
+        trial_cancellations = len(df[
+            (df['canceled_at'] >= week_start) &
+            (df['canceled_at'] <= week_end) &
+            (df['trial_canceled'] == True)
+        ])
+        
+        # 7. Refund requests during week
+        refund_requests = len(df[
+            (df['canceled_at'] >= week_start) &
+            (df['canceled_at'] <= week_end) &
+            (df['requested_refund'] == True)
+        ])
+        
+        # 8. Year 1 completions
+        year_1_completions = len(df[
+            (df['paying_start_date'] + pd.Timedelta(days=365) >= week_start) &
+            (df['paying_start_date'] + pd.Timedelta(days=365) <= week_end) &
+            (df['completed_year_1'] == True) &
+            (df['status'] == 'active')  # Still active after 1 year
+        ])
+        
+        # 9. Year 1 cancellations
+        year_1_cancellations = len(df[
+            (df['canceled_at'] >= week_start) &
+            (df['canceled_at'] <= week_end) &
+            (df['canceled_during_year_1'] == True)
+        ])
+        
+        # 10. Year 2 refunds
+        year_2_refunds = len(df[
+            (df['canceled_at'] >= week_start) &
+            (df['canceled_at'] <= week_end) &
+            (df['year_2_refund'] == True)
+        ])
+        
+        weekly_results.append({
+            'year_week': f"{week_start.year}-W{week_start.isocalendar().week:02d}",
+            'week_start': week_start,
+            'week_end': week_end,
+            'full_members_at_start': full_members_at_start,
+            'new_full_members': new_full_members,
+            'churned_full_members': churned_full_members,
+            'trial_signups': trial_signups,
+            'trial_conversions': trial_conversions,
+            'trial_cancellations': trial_cancellations,
+            'refund_requests': refund_requests,
+            'year1_completions': year_1_completions,
+            'year1_cancellations': year_1_cancellations,
+            'year2_refunds': year_2_refunds,
+            'trial_conversion_rate': (trial_conversions / trial_signups * 100) if trial_signups > 0 else 0
+        })
+    
+    weekly_df = pd.DataFrame(weekly_results)
+    
+    print(f"✅ Generated corrected weekly metrics:")
+    print(f"   • Total weeks: {len(weekly_df)}")
+    print(f"   • Total new full members: {weekly_df['new_full_members'].sum():,}")
+    print(f"   • Total churned members: {weekly_df['churned_full_members'].sum():,}")
+    print(f"   • Total trial signups: {weekly_df['trial_signups'].sum():,}")
+    print(f"   • Total trial conversions: {weekly_df['trial_conversions'].sum():,}")
+    
+    return weekly_df
+
+def run_corrected_dashboard(df, today_date):
+    """
+    Main function to run the corrected dashboard
+    """
+    print("🚀 RUNNING CORRECTED SUBSCRIPTION DASHBOARD")
+    print("=" * 60)
+    
+    # Create and export the corrected dashboard
+    fig, weekly_metrics = create_corrected_dashboard(df, today_date)
+    
+    # Export the corrected weekly metrics
+    weekly_metrics.to_csv("corrected_weekly_metrics.csv", index=False)
+    print("💾 Corrected weekly metrics exported to: corrected_weekly_metrics.csv")
+    
+    return fig, weekly_metrics
+
+# Run the corrected dashboard
+fig, metrics = run_corrected_dashboard(df, today_date)
