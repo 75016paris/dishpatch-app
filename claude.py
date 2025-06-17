@@ -6,6 +6,8 @@ import pandas as pd
 import seaborn as sns
 import os
 from datetime import datetime
+from reportlab.pdfgen import canvas
+
 
 # %%
 ######################################################################################
@@ -58,7 +60,6 @@ archive_csv_dir = 'archive/csv'
 archive_png_dir = 'archive/analysis'
 analysis_dir = 'analysis'
 
-
 # %%
 ######################################################################################
 # LOADING CSV
@@ -109,6 +110,7 @@ for file_path in sorted_files:
 # Load both CSV files into pandas DataFrames
 file1_path, file2_path = processed_files[0], processed_files[1]
 print(f"\nLoading CSV files:")
+print(f"  File 1: {os.path.basename(file1_path)}")
 print(f"  File 1: {os.path.basename(file1_path)}")
 print(f"  File 2: {os.path.basename(file2_path)}")
 
@@ -1219,8 +1221,6 @@ print(f"\n📊 All time metrics: {trials_metrics_all}")
 
 # %%
 #######################################################################################
-# %%
-#######################################################################################
 # COHORT CONVERSION FUNNEL ANALYSIS
 # Bar 1: Trials
 # Bar 2: Survivors after trial cancellation period
@@ -1478,6 +1478,25 @@ Total Drop-off: {100 - conversion_refund:.1f}%"""
         'comparison_data': cohorts_data
     }
 
-# === USAGE ===
 cohort_results = plot_cohort_conversion_funnel(df, today_date)
-print(f"\n📊 Cohort analysis results: {cohort_results}")
+print(f"\n Cohort analysis results: {cohort_results}")
+
+
+# %%
+######################################################################################
+# Creating the pdf
+fileName = f'DISHPATCH - Analysis Report {today_date}.pdf'
+week_info = get_specific_past_week(weeks_back=1, reference_date=today_date)
+documentTitle = f"Analysis Report from {week_info['monday']} to { week_info['sunday']}"
+title = f"DISHPATCH Analysis Report from {week_info['monday']} to { week_info['sunday']}"
+subTitle = 'From {week_info["monday"]} to {week_info["sunday"]}'
+
+pdf = canvas.Canvas(fileName)
+pdf.setFont("Helvetica-Bold", 16)
+pdf.setTitle(documentTitle)
+pdf.
+pdf.drawString(100, 800, title)
+
+
+
+pdf.save()
