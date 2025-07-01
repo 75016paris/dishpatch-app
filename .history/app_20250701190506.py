@@ -81,7 +81,8 @@ if uploaded_file:
 
     col1 = st.columns(1)
     col1.metric("Conversion Rate (from Trial to Full Member):", f"{renewal_dict['conversion_rate']}%")
-    st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
+    # ajout un commentaire en italique
+    f"To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)
 
 
     # Visualisations

@@ -73,16 +73,13 @@ if uploaded_file:
     fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
 
+    # Métriques clés
+    full_members = get_full_members_count(sub_df)
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Full Active member:", dict_full_member['active'])
-    col2.metric("Active Full Member in 1st year", renewal_dict['active_in_y1'])
-    col3.metric("Active Full Member in 2nd year", renewal_dict['active_in_y2'])
-
-    col1 = st.columns(1)
-    col1.metric("Conversion Rate (from Trial to Full Member):", f"{renewal_dict['conversion_rate']}%")
-    st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
-
+    col1.metric("Membres Actifs", full_members['active'])
+    col2.metric("Taux de Conversion", f"{renewal_dict['conversion_rate']}%")
+    col3.metric("Nouveaux Essais", new_trial_last_week['trials_count'])
 
     # Visualisations
     st.header("Performances Hebdomadaires")
