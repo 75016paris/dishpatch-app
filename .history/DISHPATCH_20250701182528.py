@@ -3604,8 +3604,4 @@ def generate_complete_report(today_date, today_iso, analysis_dir='analysis'):
 print(f"\n📄 Generating harmonized PDF report...")
 #complete_pdf = generate_complete_report(today_date, today_iso, analysis_dir)
 
-# if complete_pdf:
-#     print(f"\n✅ Report generation complete!")
-#     print(f"📁 Check your {analysis_dir} folder for the PDF file.")
-# else:
-#     print(f"\n⚠️ PDF generation failed.")
+?
