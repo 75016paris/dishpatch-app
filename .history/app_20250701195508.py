@@ -114,7 +114,7 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     col1.metric("Max week:", f"{trials_metrics_8w['max_week']} - ({trials_metrics_8w['max_week_label']})")
-    col2.metric("Min week:", f"{trials_metrics_8w['min_week']} - ({trials_metrics_8w['min_week_label']})")
+    col2.metric("Min week:", f"{trials_metrics_8w['min_week']} - ({trials_metrics_8w['min_week_label']}")
 
     st.pyplot(fig_trials_all_time)
 
