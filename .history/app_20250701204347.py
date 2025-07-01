@@ -198,7 +198,7 @@ if uploaded_file:
     st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
 
     st.metric("Renewal Rate:", f"{renewal_dict['renewal_rate_y1_to_y2']}%")
-    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *ask for refund, from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%** *ask for refund*")
+    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *ask for refunfrom 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%**")
 
     col1, col2 = st.columns(2)
     col1.metric("New trial last week:", new_trial_last_week['trials_count'])

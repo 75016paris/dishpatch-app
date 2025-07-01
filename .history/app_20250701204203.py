@@ -198,7 +198,7 @@ if uploaded_file:
     st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
 
     st.metric("Renewal Rate:", f"{renewal_dict['renewal_rate_y1_to_y2']}%")
-    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *ask for refund, from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%** *ask for refund*")
+    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%**")
 
     col1, col2 = st.columns(2)
     col1.metric("New trial last week:", new_trial_last_week['trials_count'])
@@ -281,10 +281,6 @@ if uploaded_file:
     col1.metric("Max conversions week:", f"{weekly_flow_all_time_result['max_conv_value']} - ({weekly_flow_all_time_result['max_conv_label']})")
     col2.metric("Min conversions week:", f"{weekly_flow_all_time_result['min_conv_value']} - ({weekly_flow_all_time_result['min_conv_label']})")
 
-
-    st.markdown("---")
-
-
     st.header("RENEWAL FLOW")
     st.pyplot(fig_renewal_8w)
 
@@ -310,8 +306,6 @@ if uploaded_file:
     col1.metric("Average renewals per week (all time):", f"{renewal_flow_results['avg_renewals_per_week']:.1f}")
     col2.metric("Average Post-Renewal per week (all time):", f"{renewal_flow_results['avg_post_churn_per_week']:.1f}")
     col3.metric("Average Refund per week (all time):", f"{renewal_flow_results['avg_refund_per_week']:.1f}")
-
-    st.markdown("---")
 
     st.header("CONVERSION FUNNEL")
     st.pyplot(fig_cohort)
