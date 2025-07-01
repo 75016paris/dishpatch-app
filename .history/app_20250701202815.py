@@ -195,4 +195,4 @@ if uploaded_file:
     col2.metric("Drop-off during refund:", f"{last_cohort_dict['drop_off_refund']:.1f}%")
     col3.metric("Total drop-off:", f"{last_cohort_dict['total_drop_off']:.1f}")
 
-    st.pyplot(fig_cohort_comparison)
+    st.pyplot(fig_cohort)
