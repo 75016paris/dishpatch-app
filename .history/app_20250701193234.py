@@ -109,12 +109,8 @@ if uploaded_file:
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Latest week:", trials_metrics_8w['latest_week'])
-    col2.metric("Previous week:", trials_metrics_8w['previous_week'])
-    col3.metric("Week-over-week change:", f"{trials_metrics_8w['week_over_week_change']} ({trials_metrics_8w['week_over_week_pct']:.1f}%")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Max week::", f"{trials_metrics_8w['max_week']} - ({trials_metrics_8w['max_week_label']}")
-    col2.metric("Min week::", f"{trials_metrics_8w['min_week']} - ({trials_metrics_8w['min_week_label']}")
+    col2.metric("Previous week:", renewal_dict['active_in_y1'])
+    col3.metric("Active Full Member in 2nd year", renewal_dict['active_in_y2'])
 
     st.pyplot(fig_trials_all_time)
 
