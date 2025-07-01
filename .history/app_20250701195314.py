@@ -141,7 +141,7 @@ if uploaded_file:
 
     col1, col2 = st.columns(3)
     col1.metric("Max conversions week:", f"{metrics_8w['max_conv_week']} - ({metrics_8w['max_conv_label'])}")
-    col1.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label'])}")
+    col1.metric("M conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label'])}")
 
     # Affichage des données
     st.header("Données Brutes")

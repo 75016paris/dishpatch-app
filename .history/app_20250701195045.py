@@ -139,9 +139,9 @@ if uploaded_file:
     col2.metric("Average churn per week (8 weeks):", f"{metrics_8w['avg_churn_per_week']:.1f}")
     col2.metric("Average Net growth (8 weeks):", f"{metrics_8w['avg_net_growth']:.1f}")
 
-    col1, col2 = st.columns(3)
-    col1.metric("Max conversions week:", f"{metrics_8w['max_conv_week']} - ({metrics_8w['max_conv_label'])}")
-    col1.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label'])}")
+        col1, col2 = st.columns(2)
+    col1.metric("Max Trial week:", f"{trials_metrics_all['max_week']} - ({trials_metrics_all['max_week_label'])}")
+    col2.metric("Min Trial week:", f"{trials_metrics_all['min_week']} - ({trials_metrics_all['min_week_label'])}")
 
     # Affichage des données
     st.header("Données Brutes")

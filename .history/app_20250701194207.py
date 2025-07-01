@@ -110,38 +110,14 @@ if uploaded_file:
     col1, col2, col3 = st.columns(3)
     col1.metric("Latest week:", trials_metrics_8w['latest_week'])
     col2.metric("Previous week:", trials_metrics_8w['previous_week'])
-    col3.metric("Week-over-week change:", f"{trials_metrics_8w['week_over_week_change']} ({trials_metrics_8w['week_over_week_pct']:.1f}%)")
+    col3.metric("Week-over-week change:", f"{trials_metrics_8w['week_over_week_change']} ({trials_metrics_8w['week_over_week_pct']:.1f}%")
 
     col1, col2 = st.columns(2)
-    col1.metric("Max week:", f"{trials_metrics_8w['max_week']} - ({trials_metrics_8w['max_week_label'])}")
-    col2.metric("Min week:", f"{trials_metrics_8w['min_week']} - ({trials_metrics_8w['min_week_label'])}")
+    col1.metric("Max week::", f"{trials_metrics_8w['max_week']} - ({trials_metrics_8w['max_week_label'])}")
+    col2.metric("Min week::", f"{trials_metrics_8w['min_week']} - ({trials_metrics_8w['min_week_label']}")
 
     st.pyplot(fig_trials_all_time)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total trials (all time):", f"{trials_metrics_all['total_trials']:.0f}")
-    col2.metric("Average per week:", f"{trials_metrics_all['average_per_week']:.0f}")
-    col3.metric("Recent 4-week average:", f"{trials_metrics_8w['recent_4w_avg']:.0f}")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Max Trial week:", f"{trials_metrics_all['max_week']} - ({trials_metrics_all['max_week_label'])}")
-    col2.metric("Min Trial week:", f"{trials_metrics_all['min_week']} - ({trials_metrics_all['min_week_label'])}")
-
-    st.pyplot(fig_flow_8w)
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total conversions (8 weeks):", f"{metrics_8w['conversions']}")
-    col2.metric("Total churn (8 weeks):", f"{metrics_8w['churn']}")
-    col3.metric("Net growth (8 weeks):", f"{metrics_8w['net_growth']}")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Average conversions per week (8 weeks):", f"{metrics_8w['avg_conversions_per_week']:.1f}")
-    col2.metric("Average churn per week (8 weeks):", f"{metrics_8w['avg_churn_per_week']:.1f}")
-    col2.metric("Average Net growth (8 weeks):", f"{metrics_8w['avg_net_growth']:.1f}")
-
-    col1, col2 = st.columns(3)
-    col1.metric("Max conversions week:", f"{metrics_8w['max_conv_week']} - ({metrics_8w['max_conv_label'])}")
-    col1.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label'])}")
 
     # Affichage des données
     st.header("Données Brutes")
