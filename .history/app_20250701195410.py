@@ -124,8 +124,8 @@ if uploaded_file:
     col3.metric("Recent 4-week average:", f"{trials_metrics_8w['recent_4w_avg']:.0f}")
 
     col1, col2 = st.columns(2)
-    col1.metric("Max Trial week:", f"{trials_metrics_all['max_week']} - ({trials_metrics_all['max_week_label']})")
-    col2.metric("Min Trial week:", f"{trials_metrics_all['min_week']} - ({trials_metrics_all['min_week_label']})")
+    col1.metric("Max Trial week:", f"{trials_metrics_all['max_week']} - ({trials_metrics_all['max_week_label'])}")
+    col2.metric("Min Trial week:", f"{trials_metrics_all['min_week']} - ({trials_metrics_all['min_week_label']}")
 
     st.pyplot(fig_flow_8w)
 
