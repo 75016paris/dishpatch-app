@@ -102,7 +102,7 @@ if uploaded_file:
     # fig, ax = plt.subplots(figsize=(10, 6))
     # # Ajoutez vos visualisations ici
     st.pyplot(fig_trials_8w)
-    st.pyplot(fig_trials_all_time)
+    st.pyplot(fig_trials_8w)
 
 
     # Affichage des données
