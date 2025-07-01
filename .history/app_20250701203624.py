@@ -154,38 +154,7 @@ if uploaded_file:
     fig_cohort, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
     fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("📄 Télécharger le rapport PDF", type="primary", use_container_width=True):
-            with st.spinner("Génération du PDF en cours..."):
-                pdf_buffer = generate_pdf_report(
-                    sub_df, today_date, dict_full_member, renewal_dict,
-                    new_trial_last_week, new_trial_prev_week,
-                    last_week_new_full_member, prev_week_new_full_member,
-                    last_week_churned_members, prev_week_churned_members,
-                    trials_metrics_8w, trials_metrics_all, metrics_8w,
-                    weekly_flow_all_time_result, renewal_metrics_8w,
-                    renewal_flow_results, last_cohort_dict, REFUND_PERIOD_DAYS,
-                    fig_trials_8w, fig_trials_all_time, fig_flow_8w, fig_flow_all_time,
-                    fig_renewal_8w, fig_renewal_all_time, fig_cohort, fig_cohort_comparison
-                )
 
-                # Nom du fichier avec timestamp
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"DISHPATCH_Analytics_Report_{timestamp}.pdf"
-
-                st.download_button(
-                    label="⬇️ Cliquez ici pour télécharger",
-                    data=pdf_buffer,
-                    file_name=filename,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-                st.success("✅ PDF généré avec succès!")
-
-    st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Full Active member:", dict_full_member['active'])

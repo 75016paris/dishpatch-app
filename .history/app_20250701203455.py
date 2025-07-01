@@ -8,97 +8,16 @@ from DISHPATCH import paying_members, add_ended_at_utc, calculate_duration, get_
 from DISHPATCH import plot_weekly_trials_8_weeks, plot_weekly_trials_all_time, weekly_flow_8_weeks, weekly_flow_all_time, weekly_renewal_flow_8_weeks, weekly_renewal_flow_all_time, plot_cohort_conversion_funnel, plot_cohort_conversion_funnel_comparison
 import matplotlib
 matplotlib.use('Agg')
-from matplotlib.backends.backend_pdf import PdfPages
-import io
-from datetime import datetime
 
 
-
+# Configuration de la page
 st.set_page_config(
     page_title="DISHPATCH Analytics",
     page_icon="📊",
     layout="wide"
 )
 
-def generate_pdf_report(sub_df, today_date, dict_full_member, renewal_dict, new_trial_last_week,
-                       new_trial_prev_week, last_week_new_full_member, prev_week_new_full_member,
-                       last_week_churned_members, prev_week_churned_members, trials_metrics_8w,
-                       trials_metrics_all, metrics_8w, weekly_flow_all_time_result, renewal_metrics_8w,
-                       renewal_flow_results, last_cohort_dict, REFUND_PERIOD_DAYS,
-                       fig_trials_8w, fig_trials_all_time, fig_flow_8w, fig_flow_all_time,
-                       fig_renewal_8w, fig_renewal_all_time, fig_cohort, fig_cohort_comparison):
-
-    # Create a buffer for the PDF
-    buffer = io.BytesIO()
-
-    with PdfPages(buffer) as pdf:
-        # Page 1: Key Metrics
-        fig, ax = plt.subplots(figsize=(11, 8))
-        ax.axis('off')
-
-        # Title
-        fig.suptitle('DISHPATCH Subscription Analytics Report', fontsize=20, fontweight='bold', y=0.95)
-
-        # Report Date
-        report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-        ax.text(0.5, 0.85, f'Report generated on: {report_date}',
-                ha='center', va='top', fontsize=12, transform=ax.transAxes)
-
-        # Key Metrics
-        metrics_text = f"""
-KEY METRICS:
-
-• Total Active Members: {dict_full_member['active']}
-• Active Members in 1st Year: {renewal_dict['active_in_y1']}
-• Active Members in 2nd Year: {renewal_dict['active_in_y2']}
-
-• Conversion Rate (Trial → Full Member): {renewal_dict['conversion_rate']}%
-• Renewal Rate: {renewal_dict['renewal_rate_y1_to_y2']}%
-
-WEEKLY METRICS:
-
-• New Trials Last Week: {new_trial_last_week['trials_count']}
-• New Trials Previous Week: {new_trial_prev_week['trials_count']}
-
-• New Full Members Last Week: {last_week_new_full_member['count']}
-• New Full Members Previous Week: {prev_week_new_full_member['count']}
-
-• Churned Members Last Week: {last_week_churned_members['count']}
-• Churned Members Previous Week: {prev_week_churned_members['count']}
-
-NOTES:
-- Refund Period: {REFUND_PERIOD_DAYS} days
-- To be a full member, a user must complete their trial,
-  not request a refund, and not be gifted
-        """
-
-        ax.text(0.05, 0.75, metrics_text, ha='left', va='top', fontsize=11,
-                transform=ax.transAxes, family='monospace')
-
-        pdf.savefig(fig, bbox_inches='tight')
-        plt.close()
-
-        # Page 2: Trial Plots
-        pdf.savefig(fig_trials_8w, bbox_inches='tight')
-        pdf.savefig(fig_trials_all_time, bbox_inches='tight')
-
-        # Page 3: Member Flow
-        pdf.savefig(fig_flow_8w, bbox_inches='tight')
-        pdf.savefig(fig_flow_all_time, bbox_inches='tight')
-
-        # Page 4: Renewal Flow
-        pdf.savefig(fig_renewal_8w, bbox_inches='tight')
-        pdf.savefig(fig_renewal_all_time, bbox_inches='tight')
-
-        # Page 5: Conversion Funnel
-        pdf.savefig(fig_cohort, bbox_inches='tight')
-        pdf.savefig(fig_cohort_comparison, bbox_inches='tight')
-
-    buffer.seek(0)
-    return buffer
-
-
-
+# Titre de l'application
 st.title("📊 DISHPATCH Subscription Analytics")
 st.markdown("""
 **Subscription Analytics Dashboard**
@@ -154,38 +73,7 @@ if uploaded_file:
     fig_cohort, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
     fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("📄 Télécharger le rapport PDF", type="primary", use_container_width=True):
-            with st.spinner("Génération du PDF en cours..."):
-                pdf_buffer = generate_pdf_report(
-                    sub_df, today_date, dict_full_member, renewal_dict,
-                    new_trial_last_week, new_trial_prev_week,
-                    last_week_new_full_member, prev_week_new_full_member,
-                    last_week_churned_members, prev_week_churned_members,
-                    trials_metrics_8w, trials_metrics_all, metrics_8w,
-                    weekly_flow_all_time_result, renewal_metrics_8w,
-                    renewal_flow_results, last_cohort_dict, REFUND_PERIOD_DAYS,
-                    fig_trials_8w, fig_trials_all_time, fig_flow_8w, fig_flow_all_time,
-                    fig_renewal_8w, fig_renewal_all_time, fig_cohort, fig_cohort_comparison
-                )
 
-                # Nom du fichier avec timestamp
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"DISHPATCH_Analytics_Report_{timestamp}.pdf"
-
-                st.download_button(
-                    label="⬇️ Cliquez ici pour télécharger",
-                    data=pdf_buffer,
-                    file_name=filename,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-                st.success("✅ PDF généré avec succès!")
-
-    st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Full Active member:", dict_full_member['active'])
