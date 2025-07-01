@@ -142,7 +142,7 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     col1.metric("Max conversions week:", f"{metrics_8w['max_conv_week']} - ({metrics_8w['max_conv_label']})")
-    col2.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label']})")
+    col1.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label']})")
 
     st.pyplot(fig_flow_all_time)
 
@@ -158,28 +158,28 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     col1.metric("Max conversions week:", f"{weekly_flow_all_time_result['max_conv_week']} - ({weekly_flow_all_time_result['max_conv_label']})")
-    col2.metric("Min conversions week:", f"{weekly_flow_all_time_result['min_conv_week']} - ({weekly_flow_all_time_result['min_conv_label']})")
+    col1.metric("Min conversions week:", f"{weekly_flow_all_time_result['min_conv_week']} - ({weekly_flow_all_time_result['min_conv_label']})")
 
     st.header("RENEWAL FLOW")
     st.pyplot(fig_renewal_8w)
 
     col1, col2 = st.columns(2)
     col1.metric("Total renewals (8 weeks):", f"{renewal_metrics_8w['total_renewals']}")
-    col2.metric("Total churn (8 weeks):", f"{renewal_metrics_8w['total_churn']}")
+    col1.metric("Total churn (8 weeks):", f"{renewal_metrics_8w['total_churn']}")
 
     col1, col2 = st.columns(2)
     col1.metric("Post-Renewal Churn:", f"{renewal_metrics_8w['churn_post_renewal']}")
-    col2.metric("Refund Churn:", f"{renewal_metrics_8w['churn_refund_renewal']}")
+    col1.metric("Refund Churn:", f"{renewal_metrics_8w['churn_refund_renewal']}")
 
     st.pyplot(fig_renewal_all_time)
 
     col1, col2 = st.columns(2)
     col1.metric("Total renewals (8 weeks):", f"{renewal_flow_results['total_renewals']}")
-    col2.metric("Total churn (8 weeks):", f"{renewal_flow_results['total_churn']}")
+    col1.metric("Total churn (8 weeks):", f"{renewal_flow_results['total_churn']}")
 
     col1, col2 = st.columns(2)
     col1.metric("Post-Renewal Churn:", f"{renewal_flow_results['churn_post_renewal']}")
-    col2.metric("Refund Churn:", f"{renewal_flow_results['churn_refund_renewal']}")
+    col1.metric("Refund Churn:", f"{renewal_flow_results['churn_refund_renewal']}")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Average renewals per week (all time):", f"{renewal_flow_results['avg_renewals_per_week']:.1f}")
