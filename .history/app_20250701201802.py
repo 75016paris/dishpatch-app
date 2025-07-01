@@ -194,3 +194,12 @@ if uploaded_file:
     col2.metric("Drop-off during refund:", f"{last_cohort_dict['drop_off_refund']:.1f}%")
     col2.metric("Total drop-off:", f"{last_cohort_dict['total_drop_off']:.1f}")
 
+
+
+
+
+
+
+    # Affichage des données
+    st.header("Données Brutes")
+    st.dataframe(sub_df.head())

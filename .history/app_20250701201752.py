@@ -186,7 +186,7 @@ if uploaded_file:
     col2.metric("Average Post-Renewal per week (all time):", f"{renewal_flow_results['avg_post_churn_per_week']:.1f}")
     col2.metric("Average Refund per week (all time):", f"{renewal_flow_results['avg_refund_per_week']:.1f}")
 
-    st.header("CONVERSION FUNNEL")
+    st.header("RENEWAL FLOW")
     st.pyplot(fig_cohort)
 
     col1, col2, col3 = st.columns(3)
@@ -194,3 +194,12 @@ if uploaded_file:
     col2.metric("Drop-off during refund:", f"{last_cohort_dict['drop_off_refund']:.1f}%")
     col2.metric("Total drop-off:", f"{last_cohort_dict['total_drop_off']:.1f}")
 
+
+
+
+
+
+
+    # Affichage des données
+    st.header("Données Brutes")
+    st.dataframe(sub_df.head())

@@ -98,7 +98,7 @@ if uploaded_file:
     col2.metric("Churn full member previous week:", prev_week_churned_members['count'])
 
     # Visualisations
-    st.header("NEW TRIALS")
+    st.header("WEEKLY NEW TRIALS")
     # fig, ax = plt.subplots(figsize=(10, 6))
     # # Ajoutez vos visualisations ici
     st.pyplot(fig_trials_8w)
@@ -127,7 +127,6 @@ if uploaded_file:
     col1.metric("Max Trial week:", f"{trials_metrics_all['max_week']} - ({trials_metrics_all['max_week_label']})")
     col2.metric("Min Trial week:", f"{trials_metrics_all['min_week']} - ({trials_metrics_all['min_week_label']})")
 
-    st.header("FULL MEMBERS FLOW")
     st.pyplot(fig_flow_8w)
 
     col1, col2, col3 = st.columns(3)
@@ -157,40 +156,10 @@ if uploaded_file:
     col3.metric("Net growth average (all time):", f"{weekly_flow_all_time_result['avg_net_per_week']:.1f}")
 
     col1, col2 = st.columns(2)
-    col1.metric("Max conversions week:", f"{weekly_flow_all_time_result['max_conv_week']} - ({weekly_flow_all_time_result['max_conv_label']})")
-    col1.metric("Min conversions week:", f"{weekly_flow_all_time_result['min_conv_week']} - ({weekly_flow_all_time_result['min_conv_label']})")
+    col1.metric("Max conversions week:", f"{metrics_8w['max_conv_week']} - ({metrics_8w['max_conv_label']})")
+    col1.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label']})")
 
-    st.header("RENEWAL FLOW")
-    st.pyplot(fig_renewal_8w)
 
-    col1, col2 = st.columns(2)
-    col1.metric("Total renewals (8 weeks):", f"{renewal_metrics_8w['total_renewals']}")
-    col1.metric("Total churn (8 weeks):", f"{renewal_metrics_8w['total_churn']}")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Post-Renewal Churn:", f"{renewal_metrics_8w['churn_post_renewal']}")
-    col1.metric("Refund Churn:", f"{renewal_metrics_8w['churn_refund_renewal']}")
-
-    st.pyplot(fig_renewal_all_time)
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total renewals (8 weeks):", f"{renewal_flow_results['total_renewals']}")
-    col1.metric("Total churn (8 weeks):", f"{renewal_flow_results['total_churn']}")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Post-Renewal Churn:", f"{renewal_flow_results['churn_post_renewal']}")
-    col1.metric("Refund Churn:", f"{renewal_flow_results['churn_refund_renewal']}")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Average renewals per week (all time):", f"{renewal_flow_results['avg_renewals_per_week']:.1f}")
-    col2.metric("Average Post-Renewal per week (all time):", f"{renewal_flow_results['avg_post_churn_per_week']:.1f}")
-    col2.metric("Average Refund per week (all time):", f"{renewal_flow_results['avg_refund_per_week']:.1f}")
-
-    st.header("CONVERSION FUNNEL")
-    st.pyplot(fig_cohort)
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Drop-off during trial:", f"{last_cohort_dict['drop_off_trial']:.1f}%")
-    col2.metric("Drop-off during refund:", f"{last_cohort_dict['drop_off_refund']:.1f}%")
-    col2.metric("Total drop-off:", f"{last_cohort_dict['total_drop_off']:.1f}")
-
+    # Affichage des données
+    st.header("Données Brutes")
+    st.dataframe(sub_df.head())
