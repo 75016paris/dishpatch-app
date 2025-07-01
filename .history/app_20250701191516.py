@@ -82,7 +82,7 @@ if uploaded_file:
     st.metric("Conversion Rate (from Trial to Full Member):", f"{renewal_dict['conversion_rate']}%")
     st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
 
-    st.metric("Renewal Rate:", f"**{renewal_dict['renewal_rate_y1_to_y2']}%**")
+    st.metric("Renewal Rate:" **{renewal_dict['renewal_rate_y1_to_y2']}%**")
     st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}%** *from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}%**")
 
 
