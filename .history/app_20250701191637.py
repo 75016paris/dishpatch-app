@@ -82,20 +82,9 @@ if uploaded_file:
     st.metric("Conversion Rate (from Trial to Full Member):", f"{renewal_dict['conversion_rate']}%")
     st.markdown(f"*To be a full member a user must complete their trial, not request a refund, and not be gifted. (refund period {REFUND_PERIOD_DAYS} days)*")
 
-    st.metric("Renewal Rate:", f"{renewal_dict['renewal_rate_y1_to_y2']}%")
-    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%**")
+    st.metric("Renewal Rate:", f"{renewal_dict['renewal_rate_y1_to_y2']}%**")
+    st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}%** *from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}%**")
 
-    col1, col2 = st.columns(2)
-    col1.metric("New trial last week:", new_trial_last_week['trials_count'])
-    col2.metric("New trial previous week:", new_trial_prev_week['trials_count'])
-
-    col1, col2 = st.columns(2)
-    col1.metric("New full member last week:", last_week_new_full_member['count'])
-    col2.metric("New full member previous week:", prev_week_new_full_member['count'])
-
-    col1, col2 = st.columns(2)
-    col1.metric("Churn full member last week:", last_week_churned_members['count'])
-    col2.metric("Churn full member previous week:", prev_week_churned_members['count'])
 
     # Visualisations
     st.header("Performances Hebdomadaires")

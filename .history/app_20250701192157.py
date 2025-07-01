@@ -95,7 +95,7 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     col1.metric("Churn full member last week:", last_week_churned_members['count'])
-    col2.metric("Churn full member previous week:", prev_week_churned_members['count'])
+    col2.metric("Churn full member previous week:", peev_week_churned_members['count'])
 
     # Visualisations
     st.header("Performances Hebdomadaires")

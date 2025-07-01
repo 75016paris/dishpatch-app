@@ -86,16 +86,8 @@ if uploaded_file:
     st.markdown(f"*Renewal rate from 1st year to 2nd year:* **{renewal_dict['renewal_rate_y1_to_y2']}% - {renewal_dict['refund_rate_y2']}%** *from 2nd year to 3rd year:* **{renewal_dict['renewal_rate_y2_to_y3']}% - {renewal_dict['refund_rate_y3']}%**")
 
     col1, col2 = st.columns(2)
-    col1.metric("New trial last week:", new_trial_last_week['trials_count'])
-    col2.metric("New trial previous week:", new_trial_prev_week['trials_count'])
-
-    col1, col2 = st.columns(2)
-    col1.metric("New full member last week:", last_week_new_full_member['count'])
-    col2.metric("New full member previous week:", prev_week_new_full_member['count'])
-
-    col1, col2 = st.columns(2)
-    col1.metric("Churn full member last week:", last_week_churned_members['count'])
-    col2.metric("Churn full member previous week:", prev_week_churned_members['count'])
+    col1.metric("Full Active member:", dict_full_member['active'])
+    col2.metric("Active Full Member in 1st year", renewal_dict['active_in_y1'])
 
     # Visualisations
     st.header("Performances Hebdomadaires")
