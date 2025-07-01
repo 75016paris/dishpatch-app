@@ -1,7 +1,8 @@
 streamlit
 pandas
 numpy
-matplotlib
-seaborn
-python-dateutil
+matplotlib==3.7.1
+seaborn==0.12.2
+reportlab==4.0.4
+python-dateutil==2.8.2
 reportlab

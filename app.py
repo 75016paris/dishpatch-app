@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from DISHPATCH import preprocess_data, calculate_duration, get_full_members_count  # Importez vos fonctions
+import matplotlib
+matplotlib.use('Agg')
 
 # Configuration de la page
 st.set_page_config(
