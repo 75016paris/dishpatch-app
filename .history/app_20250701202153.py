@@ -142,7 +142,7 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     col1.metric("Max conversions week:", f"{metrics_8w['max_conv_value']} - ({metrics_8w['max_conv_label']})")
-    col2.metric("Min conversions week:", f"{metrics_8w['min_conv_value']} - ({metrics_8w['min_conv_label']})")
+    col2.metric("Min conversions week:", f"{metrics_8w['min_conv_week']} - ({metrics_8w['min_conv_label']})")
 
     st.pyplot(fig_flow_all_time)
 
