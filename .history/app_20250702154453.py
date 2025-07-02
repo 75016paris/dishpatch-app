@@ -50,8 +50,7 @@ st.markdown("""
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
 
 if uploaded_file:
-    #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
-    today_date = pd.Timestamp.now(tz='UTC')
+    today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
     today_iso = pd.to_datetime(today_date).isocalendar()
 
     # Set REFUND PERDIOD DURATION
