@@ -2955,7 +2955,7 @@ def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
 
     except Exception as e:
         print(f"❌ Error calculating ISO week bounds: {e}")
-        return None, {}
+        return {}
 
     # === HELPER FUNCTION TO ADD ISO COLUMNS (optional for validation) ===
     def add_iso_week_columns(df, date_column):
@@ -2999,31 +2999,9 @@ def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
             # Use the ISO method for greater accuracy
             complete_cohort_trials = iso_validation
 
-    def create_default_cohort_dict():
-        """Crée un dictionnaire avec toutes les clés nécessaires à 0"""
-        return {
-            'total_trials': 0,
-            'survived_trial': 0,
-            'survived_refund': 0,
-            'conversion_trial_rate': 0.0,
-            'conversion_refund_rate': 0.0,
-            'survival_rate_trial_to_refund': 0.0,
-            'drop_off_trial': 0.0,
-            'drop_off_refund': 0.0,
-            'total_drop_off': 0.0,
-            'cohort_week_start': None,
-            'cohort_week_end': None,
-            'cohort_week_label': 'No Data',
-            'cohort_week_key': 'No Data',
-            'cohort_year': 0,
-            'cohort_week_number': 0,
-            'weeks_back': 0
-        }
-
-    # Dans vos fonctions, au lieu de retourner {} :
     if len(complete_cohort_trials) == 0:
         print(f"❌ No trial data found for cohort week {cohort_week_key}")
-        return None, create_default_cohort_dict()
+        return {}
 
     print(f"✅ Found {len(complete_cohort_trials)} trials in cohort week {cohort_week_key}")
 
@@ -3143,7 +3121,6 @@ def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last
     REFACTORED to use standardized ISO week functions instead of Pandas calculations
     """
 
-
     sub_df = sub_df[~sub_df['is_gifted_member']].copy()
 
     print("📊 Creating cohort conversion funnel comparison using standardized ISO calendar...")
@@ -3151,35 +3128,29 @@ def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last
     # Check if there is data
     if 'trial_start_utc' not in sub_df.columns or sub_df['trial_start_utc'].isna().all():
         print("❌ No trial data found")
-        return None, {}
+        return {}
 
     # === RETRIEVE DATA FROM THE LAST COHORT ===
-    # last_total_trials = last_cohort_dict['total_trials']
-    # last_survived_trial = last_cohort_dict['survived_trial']
-    # last_survived_refund = last_cohort_dict['survived_refund']
-    # last_conversion_trial_rate = last_cohort_dict['conversion_trial_rate']
-    # last_conversion_refund_rate = last_cohort_dict['conversion_refund_rate']
-    # last_total_drop_off = last_cohort_dict['total_drop_off']
-    last_total_trials = last_cohort_dict.get('total_trials', 0)
-    last_survived_trial = last_cohort_dict.get('survived_trial', 0)
-    last_survived_refund = last_cohort_dict.get('survived_refund', 0)
-    last_conversion_trial_rate = last_cohort_dict.get('conversion_trial_rate', 0)
-    last_conversion_refund_rate = last_cohort_dict.get('conversion_refund_rate', 0)
-    last_total_drop_off = last_cohort_dict.get('total_drop_off', 0)
+    last_total_trials = last_cohort_dict['total_trials']
+    last_survived_trial = last_cohort_dict['survived_trial']
+    last_survived_refund = last_cohort_dict['survived_refund']
+    last_conversion_trial_rate = last_cohort_dict['conversion_trial_rate']
+    last_conversion_refund_rate = last_cohort_dict['conversion_refund_rate']
+    last_total_drop_off = last_cohort_dict['total_drop_off']
 
     # Use ISO cohort data from the harmonized dictionary
     if 'cohort_week_key' in last_cohort_dict:
-        # New format with ISO data - utilise .get() même après avoir vérifié l'existence
-        complete_cohort_start = last_cohort_dict.get('cohort_week_start', None)
-        complete_cohort_end = last_cohort_dict.get('cohort_week_end', None)
-        complete_cohort_label = last_cohort_dict.get('cohort_week_label', 'Unknown')
-        complete_cohort_key = last_cohort_dict.get('cohort_week_key', 'Unknown')
+        # New format with ISO data
+        complete_cohort_start = last_cohort_dict['cohort_week_start']
+        complete_cohort_end = last_cohort_dict['cohort_week_end']
+        complete_cohort_label = last_cohort_dict['cohort_week_label']
+        complete_cohort_key = last_cohort_dict['cohort_week_key']
         print(f"✅ Using ISO cohort data: {complete_cohort_key}")
     else:
-        # ✅ Fallback for legacy format - UTILISE .get() AVEC DES VALEURS PAR DÉFAUT
-        complete_cohort_start = last_cohort_dict.get('cohort_week_start', None)
-        complete_cohort_end = last_cohort_dict.get('cohort_week_end', None)
-        complete_cohort_label = last_cohort_dict.get('cohort_week_label', 'Legacy Cohort')
+        # Fallback for legacy format
+        complete_cohort_start = last_cohort_dict['cohort_week_start']
+        complete_cohort_end = last_cohort_dict['cohort_week_end']
+        complete_cohort_label = last_cohort_dict['cohort_week_label']
         complete_cohort_key = "Unknown"
         print("⚠️  Using legacy cohort data format")
 

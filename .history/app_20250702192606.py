@@ -327,7 +327,7 @@ if uploaded_file:
     st.markdown("---")
 
     st.header("CONVERSION FUNNEL")
-    if fig_cohort is not None:
+    if fig_cohort is not None:  # Protection contre les cas où il n'y a pas de données
         st.pyplot(fig_cohort)
 
     col1, col2, col3 = st.columns(3)

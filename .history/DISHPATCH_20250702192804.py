@@ -2999,31 +2999,9 @@ def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
             # Use the ISO method for greater accuracy
             complete_cohort_trials = iso_validation
 
-    def create_default_cohort_dict():
-        """Crée un dictionnaire avec toutes les clés nécessaires à 0"""
-        return {
-            'total_trials': 0,
-            'survived_trial': 0,
-            'survived_refund': 0,
-            'conversion_trial_rate': 0.0,
-            'conversion_refund_rate': 0.0,
-            'survival_rate_trial_to_refund': 0.0,
-            'drop_off_trial': 0.0,
-            'drop_off_refund': 0.0,
-            'total_drop_off': 0.0,
-            'cohort_week_start': None,
-            'cohort_week_end': None,
-            'cohort_week_label': 'No Data',
-            'cohort_week_key': 'No Data',
-            'cohort_year': 0,
-            'cohort_week_number': 0,
-            'weeks_back': 0
-        }
-
-    # Dans vos fonctions, au lieu de retourner {} :
     if len(complete_cohort_trials) == 0:
         print(f"❌ No trial data found for cohort week {cohort_week_key}")
-        return None, create_default_cohort_dict()
+        return None, {}
 
     print(f"✅ Found {len(complete_cohort_trials)} trials in cohort week {cohort_week_key}")
 
@@ -3142,7 +3120,26 @@ def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last
 
     REFACTORED to use standardized ISO week functions instead of Pandas calculations
     """
-
+    def create_default_cohort_dict():
+    """Crée un dictionnaire avec toutes les clés nécessaires à 0"""
+    return {
+        'total_trials': 0,
+        'survived_trial': 0,
+        'survived_refund': 0,
+        'conversion_trial_rate': 0.0,
+        'conversion_refund_rate': 0.0,
+        'survival_rate_trial_to_refund': 0.0,
+        'drop_off_trial': 0.0,
+        'drop_off_refund': 0.0,
+        'total_drop_off': 0.0,
+        'cohort_week_start': None,
+        'cohort_week_end': None,
+        'cohort_week_label': 'No Data',
+        'cohort_week_key': 'No Data',
+        'cohort_year': 0,
+        'cohort_week_number': 0,
+        'weeks_back': 0
+    }
 
     sub_df = sub_df[~sub_df['is_gifted_member']].copy()
 

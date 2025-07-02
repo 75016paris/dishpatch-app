@@ -327,13 +327,12 @@ if uploaded_file:
     st.markdown("---")
 
     st.header("CONVERSION FUNNEL")
-    if fig_cohort is not None:
-        st.pyplot(fig_cohort)
+    st.pyplot(fig_cohort)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Total drop-off :", f"{last_cohort_dict.get('total_drop_off', 0):.1f}%")
-    col2.metric("Drop-off during trial :", f"{last_cohort_dict.get('drop_off_trial', 0):.1f}%")
-    col3.metric("Ask for Refund :", f"{last_cohort_dict.get('drop_off_refund', 0):.1f}%")
+    col2.metric("Drop-off during trial :", f"{last_cohort_dict['drop_off_trial']:.1f}%")
+    col3.metric("Ask for Refund :", f"{last_cohort_dict['drop_off_refund']:.1f}%")
 
 
     st.pyplot(fig_cohort_comparison)
