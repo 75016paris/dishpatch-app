@@ -48,7 +48,7 @@ st.markdown("""
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
 
 if uploaded_file:
-    #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
+    today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
     today_date = pd.Timestamp.now(tz='UTC')
     today_iso = pd.to_datetime(today_date).isocalendar()
 
@@ -96,82 +96,7 @@ if uploaded_file:
     fig_cohort, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
     fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
-    def generate_pdf_report(sub_df, today_date, dict_full_member, renewal_dict, new_trial_last_week,
-                        new_trial_prev_week, last_week_new_full_member, prev_week_new_full_member,
-                        last_week_churned_members, prev_week_churned_members, trials_metrics_8w,
-                        trials_metrics_all, metrics_8w, weekly_flow_all_time_result, renewal_metrics_8w,
-                        renewal_flow_results, last_cohort_dict, REFUND_PERIOD_DAYS,
-                        fig_trials_8w, fig_trials_all_time, fig_flow_8w, fig_flow_all_time,
-                        fig_renewal_8w, fig_renewal_all_time, fig_cohort, fig_cohort_comparison):
 
-        # Create a buffer for the PDF
-        buffer = io.BytesIO()
-
-        with PdfPages(buffer) as pdf:
-            # Page 1: Key Metrics
-            fig, ax = plt.subplots(figsize=(11, 8))
-            ax.axis('off')
-
-            # Title
-            fig.suptitle('DISHPATCH Subscription Analytics Report', fontsize=20, fontweight='bold', y=0.95)
-
-            # Report Date
-            report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-            ax.text(0.5, 0.85, f'Report generated on: {report_date}',
-                    ha='center', va='top', fontsize=12, transform=ax.transAxes)
-
-            # Key Metrics
-            metrics_text = f"""
-    KEY METRICS:
-
-    • Total Active Members: {dict_full_member['active']}
-    • Active Members in 1st Year: {renewal_dict['active_in_y1']}
-    • Active Members in 2nd Year: {renewal_dict['active_in_y2']}
-
-    • Conversion Rate (Trial → Full Member): {renewal_dict['conversion_rate']}%
-    • Renewal Rate: {renewal_dict['renewal_rate_y1_to_y2']}%
-
-    WEEKLY METRICS:
-
-    • New Trials Last Week: {new_trial_last_week['trials_count']}
-    • New Trials Previous Week: {new_trial_prev_week['trials_count']}
-
-    • New Full Members Last Week: {last_week_new_full_member['count']}
-    • New Full Members Previous Week: {prev_week_new_full_member['count']}
-
-    • Churned Members Last Week: {last_week_churned_members['count']}
-    • Churned Members Previous Week: {prev_week_churned_members['count']}
-
-    NOTES:
-    - Refund Period: {REFUND_PERIOD_DAYS} days
-    - To be a full member, a user must complete their trial,
-    not request a refund, and not be gifted
-            """
-
-            ax.text(0.05, 0.75, metrics_text, ha='left', va='top', fontsize=11,
-                    transform=ax.transAxes, family='monospace')
-
-            pdf.savefig(fig, bbox_inches='tight')
-            plt.close()
-
-            # Page 2: Trial Plots
-            pdf.savefig(fig_trials_8w, bbox_inches='tight')
-            pdf.savefig(fig_trials_all_time, bbox_inches='tight')
-
-            # Page 3: Member Flow
-            pdf.savefig(fig_flow_8w, bbox_inches='tight')
-            pdf.savefig(fig_flow_all_time, bbox_inches='tight')
-
-            # Page 4: Renewal Flow
-            pdf.savefig(fig_renewal_8w, bbox_inches='tight')
-            pdf.savefig(fig_renewal_all_time, bbox_inches='tight')
-
-            # Page 5: Conversion Funnel
-            pdf.savefig(fig_cohort, bbox_inches='tight')
-            pdf.savefig(fig_cohort_comparison, bbox_inches='tight')
-
-        buffer.seek(0)
-        return buffer
 
 
     target_year, target_week, target_week_key = calculate_target_iso_week(today_iso, weeks_back=1)
@@ -189,7 +114,8 @@ if uploaded_file:
     col1.metric("Full Active Members :", dict_full_member['active'])
     col1.markdown(f"*Active Full Member in 1st year :* **{renewal_dict['active_in_y1']}**")
     col1.markdown(f"*Active Full Member in 2nd year :* **{renewal_dict['active_in_y2']}**")
-
+    # col2.metric("Active Full Member in 1st year :", renewal_dict['active_in_y1'])
+    # col3.metric("Active Full Member in 2nd year :", renewal_dict['active_in_y2'])
 
     st.markdown(" ")
 

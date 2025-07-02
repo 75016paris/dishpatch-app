@@ -48,8 +48,8 @@ st.markdown("""
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
 
 if uploaded_file:
-    #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
-    today_date = pd.Timestamp.now(tz='UTC')
+    today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
+    #today_date = pd.Timestamp.now(tz='UTC')
     today_iso = pd.to_datetime(today_date).isocalendar()
 
 
@@ -96,7 +96,7 @@ if uploaded_file:
     fig_cohort, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
     fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
-    def generate_pdf_report(sub_df, today_date, dict_full_member, renewal_dict, new_trial_last_week,
+    def generate_pdf_report(sub_df, today_date, dict_full_member, renewal_dict, new_trial_last_week,Add commentMore actions
                         new_trial_prev_week, last_week_new_full_member, prev_week_new_full_member,
                         last_week_churned_members, prev_week_churned_members, trials_metrics_8w,
                         trials_metrics_all, metrics_8w, weekly_flow_all_time_result, renewal_metrics_8w,
@@ -189,7 +189,8 @@ if uploaded_file:
     col1.metric("Full Active Members :", dict_full_member['active'])
     col1.markdown(f"*Active Full Member in 1st year :* **{renewal_dict['active_in_y1']}**")
     col1.markdown(f"*Active Full Member in 2nd year :* **{renewal_dict['active_in_y2']}**")
-
+    # col2.metric("Active Full Member in 1st year :", renewal_dict['active_in_y1'])
+    # col3.metric("Active Full Member in 2nd year :", renewal_dict['active_in_y2'])
 
     st.markdown(" ")
 
