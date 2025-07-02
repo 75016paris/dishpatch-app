@@ -56,7 +56,7 @@ DUPLICATE_THRESHOLD_MINUTES = 15
 # Set DIRECTORIES
 data_dir = './'
 
-sub_raw = pd.read_csv('csv_go_here/DishpatchSubscriptionData_NIklas_Sanitised - subscriptions.csv', low_memory=False)
+#sub_raw = pd.read_csv('csv_go_here/DishpatchSubscriptionData_NIklas_Sanitised - subscriptions.csv', low_memory=False)
 
 # %%
 # DATA PREPROCESSING (customer_df)
@@ -109,7 +109,7 @@ def preprocess_data(input_df):
 
     return df
 
-sub_df = preprocess_data(sub_raw)
+#sub_df = preprocess_data(sub_raw)
 
 # %%
 # REMOVE ALL MULTI-SUB customer_id from sub_df, put them im a new df multisub_df
@@ -137,7 +137,7 @@ def remove_multi_subscriptions(df):
     return single_sub_df, multi_sub_df
 
 
-sub_df, multisub_df = remove_multi_subscriptions(sub_df)
+#sub_df, multisub_df = remove_multi_subscriptions(sub_df)
 
 # %%
 # # DATA PREPROCESSING (invoices df)
@@ -197,7 +197,7 @@ def remove_high_volume_customers(df, threshold=HIGH_VOLUME_THRESHOLD):
     return df
 
 
-multisub_df = remove_high_volume_customers(multisub_df)
+#multisub_df = remove_high_volume_customers(multisub_df)
 
 # %%
 def clean_inconsistent_statuses(df):
@@ -365,18 +365,10 @@ def custom_multisub_aggregation(df):
 
 # === USAGE ===
 print("🚀 Starting robust aggregation...")
-multisub_df = custom_multisub_aggregation(multisub_df)
+#multisub_df = custom_multisub_aggregation(multisub_df)
 
-print(f"\n📊 RESULTS:")
-print(f"   Shape: {multisub_df.shape}")
-print(f"   Columns: {len(multisub_df.columns)}")
 
-# Check for NaT
-nat_counts = multisub_df.isna().sum()
-print(f"\n🔍 NaT/NaN by column:")
-for col, count in nat_counts.items():
-    if count > 0:
-        print(f"   {col}: {count}")
+
 
 print(f"\n✅ Aggregation completed successfully!")
 
@@ -515,8 +507,8 @@ def integrate_with_subdf(sub_df, multisub_df):
     return combined_df
 
 
-combined_df = integrate_with_subdf(multisub_df, sub_df)
-sub_df = combined_df.copy()
+#combined_df = integrate_with_subdf(multisub_df, sub_df)
+#sub_df = combined_df.copy()
 
 # %%
 # CANCEL DURING TRIAL PERIOD
@@ -530,7 +522,7 @@ def cancel_during_trial(df):
     )
     return df
 
-sub_df = cancel_during_trial(sub_df)
+#sub_df = cancel_during_trial(sub_df)
 
 # %%
 # REFUND PERIOD END TIME
@@ -549,7 +541,7 @@ def refund_period_end_utc(df, REFUND_PERIOD_DAYS):
     return df
 
 # Apply the function to the subscriptions DataFrame
-sub_df = refund_period_end_utc(sub_df, REFUND_PERIOD_DAYS)
+#sub_df = refund_period_end_utc(sub_df, REFUND_PERIOD_DAYS)
 
 # %%
 # CANCEL DURRING REFUND PERIOD
@@ -564,7 +556,7 @@ def canceled_during_refund_period(df):
     )
     return df
 
-sub_df = canceled_during_refund_period(sub_df)
+#sub_df = canceled_during_refund_period(sub_df)
 
 
 # %%
@@ -598,7 +590,7 @@ def full_member_status(df):
 
     return df
 
-sub_df = full_member_status(sub_df)
+#sub_df = full_member_status(sub_df)
 
 
 # %%
@@ -623,7 +615,7 @@ def paying_members(df):
 
     return df
 
-sub_df = paying_members(sub_df)
+#sub_df = paying_members(sub_df)
 
 # %%
 # add ended_at_utc when needed
@@ -669,7 +661,7 @@ def add_ended_at_utc(df, today_date):
     return df
 
 
-sub_df = add_ended_at_utc(sub_df, today_date)
+#sub_df = add_ended_at_utc(sub_df, today_date)
 
 
 # %%
@@ -721,7 +713,7 @@ def calculate_duration(df, today_date):  # ← ADD today_date as parameter
     return df
 
 
-sub_df = calculate_duration(sub_df, today_date)
+#sub_df = calculate_duration(sub_df, today_date)
 
 # %%
 def get_full_members_count(df):
@@ -746,7 +738,7 @@ def get_full_members_count(df):
     return dict_full_members
 
 
-dict_full_member = get_full_members_count(sub_df)
+#dict_full_member = get_full_members_count(sub_df)
 
 
 # %%
@@ -807,10 +799,10 @@ def get_new_trial_last_week(df, today_iso, weeks_back=None):
 
     return results
 
-new_trial_last_week = get_new_trial_last_week(sub_df, today_iso, weeks_back=1)
-new_trial_prev_week = get_new_trial_last_week(sub_df, today_iso, weeks_back=2)
+#new_trial_last_week = get_new_trial_last_week(sub_df, today_iso, weeks_back=1)
+#new_trial_prev_week = get_new_trial_last_week(sub_df, today_iso, weeks_back=2)
 
-new_trial_last_week, new_trial_prev_week
+
 
 # %%
 # Count trials that converted to full members
@@ -852,8 +844,8 @@ def get_conversion_rate_last_weeks(df, today_iso, weeks_back):
     return results
 
 
-last_week_conversion_rate = get_conversion_rate_last_weeks(sub_df, today_iso, weeks_back=1)
-prev_week_conversion_rate = get_conversion_rate_last_weeks(sub_df, today_iso, weeks_back=2)
+#last_week_conversion_rate = get_conversion_rate_last_weeks(sub_df, today_iso, weeks_back=1)
+#prev_week_conversion_rate = get_conversion_rate_last_weeks(sub_df, today_iso, weeks_back=2)
 
 # %%
 def get_churn_members_last_week(df, today_iso, weeks_back=1):
@@ -887,9 +879,9 @@ def get_churn_members_last_week(df, today_iso, weeks_back=1):
     return results
 
 
-last_week_churned_members = get_churn_members_last_week(sub_df, today_iso, weeks_back=1)
-prev_week_churned_members = get_churn_members_last_week(sub_df, today_iso, weeks_back=2)
-prev_week_churned_members
+#last_week_churned_members = get_churn_members_last_week(sub_df, today_iso, weeks_back=1)
+#prev_week_churned_members = get_churn_members_last_week(sub_df, today_iso, weeks_back=2)
+
 
 # %%
 def cus_renewal(df):
@@ -1061,17 +1053,13 @@ def cus_renewal(df):
     return renewal_dict
 
 
-renewal_dict = cus_renewal(sub_df)
+#renewal_dict = cus_renewal(sub_df)
 
-# %%
-print("Key, Value\n")
-for key, value in renewal_dict.items():
-    if not key.endswith('_df'):
-        print(f"{key}: {value}")
+
 
 # %%
 def get_new_full_members_last_week(df, today_iso, weeks_back, REFUND_PERIOD_DAYS):
-    renewal_dict = cus_renewal(sub_df)
+    renewal_dict = cus_renewal(df)
     trial_to_full_member_df = renewal_dict['trial_to_full_member_df']
 
     df = trial_to_full_member_df[~trial_to_full_member_df['is_gifted_member']].copy()
@@ -1104,9 +1092,9 @@ def get_new_full_members_last_week(df, today_iso, weeks_back, REFUND_PERIOD_DAYS
     return results
 
 
-last_week_new_full_member = get_new_full_members_last_week(sub_df, today_iso, 1, REFUND_PERIOD_DAYS)
-prev_week_new_full_member = get_new_full_members_last_week(sub_df, today_iso, 2, REFUND_PERIOD_DAYS)
-prev_week_new_full_member, last_week_new_full_member
+#last_week_new_full_member = get_new_full_members_last_week(sub_df, today_iso, 1, REFUND_PERIOD_DAYS)
+#prev_week_new_full_member = get_new_full_members_last_week(sub_df, today_iso, 2, REFUND_PERIOD_DAYS)
+
 
 # %%
 def plot_weekly_trials_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
@@ -1344,7 +1332,7 @@ def plot_weekly_trials_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
 
 
 # Usage
-fig, trials_metrics_8w = plot_weekly_trials_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
+#fig, trials_metrics_8w = plot_weekly_trials_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
 
 # %%
 def plot_weekly_trials_all_time(sub_df, today_date, today_iso):
@@ -1595,7 +1583,7 @@ def plot_weekly_trials_all_time(sub_df, today_date, today_iso):
 
 
 # Usage
-fig, trials_metrics_all = plot_weekly_trials_all_time(sub_df, today_date, today_iso)
+#fig, trials_metrics_all = plot_weekly_trials_all_time(sub_df, today_date, today_iso)
 
 # %%
 def weekly_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
@@ -1856,7 +1844,7 @@ def weekly_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
 
 
 # === USAGE ===
-fig, metrics_8w = weekly_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
+#fig, metrics_8w = weekly_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
 
 # %%
 def weekly_flow_all_time(sub_df, today_date, today_iso):
@@ -2142,7 +2130,7 @@ def weekly_flow_all_time(sub_df, today_date, today_iso):
     }
 
 # === USAGE ===
-fig, weekly_flow_all_time_result = weekly_flow_all_time(sub_df, today_date, today_iso)
+#fig, weekly_flow_all_time_result = weekly_flow_all_time(sub_df, today_date, today_iso)
 
 # %%
 def weekly_renewal_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
@@ -2443,7 +2431,7 @@ def weekly_renewal_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8):
     }
 
 # === USAGE ===
-fig, renewal_metrics_8w = weekly_renewal_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
+#fig, renewal_metrics_8w = weekly_renewal_flow_8_weeks(sub_df, today_date, today_iso, num_weeks=8)
 
 # %%
 def weekly_renewal_flow_all_time(sub_df, today_date, today_iso):
@@ -2764,7 +2752,7 @@ def weekly_renewal_flow_all_time(sub_df, today_date, today_iso):
     }
 
 # === USAGE ===
-fig, renewal_flow_results = weekly_renewal_flow_all_time(sub_df, today_date, today_iso)
+#fig, renewal_flow_results = weekly_renewal_flow_all_time(sub_df, today_date, today_iso)
 
 # %%
 def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
@@ -2972,7 +2960,7 @@ def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
     }
 
 # Usage
-fig, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
+#fig, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
 
 # %%
 def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict):
@@ -3245,7 +3233,7 @@ def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last
     return fig, cohort_dict
 
 # Usage
-fig, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
+#fig, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
 # %%
 from reportlab.lib.pagesizes import A3, landscape
