@@ -10,8 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_pdf import PdfPages
 import io
-from datetime import datetime
-import time
+from datetime import datetime, time
 
 
 
@@ -80,7 +79,13 @@ uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
 if uploaded_file:
     with st.spinner('🔄 Processing your data... This may take a moment.'):
         # Affichage d'une barre de progression
+        progress_bar = st.progress(0)
         status_text = st.empty()
+
+        # Étape 1: Initialisation
+        status_text.text('📁 Reading CSV file...')
+        progress_bar.progress(5)
+        time.sleep(0.5)
 
         #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
         today_date = pd.Timestamp.now(tz='UTC')

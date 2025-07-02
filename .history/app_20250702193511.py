@@ -11,7 +11,6 @@ matplotlib.use('Agg')
 from matplotlib.backends.backend_pdf import PdfPages
 import io
 from datetime import datetime
-import time
 
 
 
@@ -34,35 +33,6 @@ st.markdown("""
     font-size: 23px !important;
     font-weight: bold !important;
 }
-
-/* Animation de chargement personnalisée */
-.loading-animation {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 20px 0;
-}
-
-.spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.progress-text {
-    font-size: 18px;
-    color: #333;
-    margin-top: 10px;
-    text-align: center;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,10 +48,7 @@ st.markdown("""
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
 
 if uploaded_file:
-    with st.spinner('🔄 Processing your data... This may take a moment.'):
-        # Affichage d'une barre de progression
-        status_text = st.empty()
-
+    
         #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
         today_date = pd.Timestamp.now(tz='UTC')
         today_iso = pd.to_datetime(today_date).isocalendar()
