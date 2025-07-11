@@ -82,7 +82,7 @@ if uploaded_file:
         # Affichage d'une barre de progression
         status_text = st.empty()
 
-        #today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
+        today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
         today_date = pd.Timestamp.now(tz='UTC')
         today_iso = pd.to_datetime(today_date).isocalendar()
 
