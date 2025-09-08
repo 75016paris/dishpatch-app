@@ -40,8 +40,8 @@ sns.set_palette("viridis")
 
 # %%
 # Set TODAY DATE
-#today_date = pd.Timestamp.now(tz='UTC')
-today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
+today_date = pd.Timestamp.now(tz='UTC')
+#today_date = pd.Timestamp('2025-05-23', tz='UTC') # For testing purposes
 today_iso = pd.to_datetime(today_date).isocalendar()
 
 
