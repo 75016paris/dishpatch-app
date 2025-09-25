@@ -169,7 +169,7 @@ if uploaded_file3:
         fig_plot_nb_cmd_by_customer_10_less = plot_nb_cmd_by_customer_10_less(nb_cmd_alltime_df)
         fig_plot_nb_cmd_by_customer_10_more = plot_nb_cmd_by_customer_10_more(nb_cmd_alltime_df)
         fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Full Member')
-        fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Not Full Member')
+        fig_plot_nb_cmd_by_customer_y1_y2_not_full = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Not Full Member')
         fig_plot_renew_churn_metrics = plot_renew_churn_metrics(merged_df)
 
 
@@ -426,18 +426,13 @@ if uploaded_file3:
         st.pyplot(fig_plot_gift_and_not)
         st.pyplot(fig_plot_price_distribution)
         st.pyplot(fig_plot_simple_and_complex_order)
+        st.pyplot(fig_plot_nb_cmd_by_customer_10_less)
+        st.pyplot(fig_plot_nb_cmd_by_customer_10_more)
+        st.pyplot(fig_plot_nb_cmd_by_customer_y1_y2)
+        st.pyplot(fig_plot_nb_cmd_by_customer_y1_y2_not_full)
+        st.pyplot(fig_plot_renew_churn_metrics)
 
 
-        # fig_plot_first_order = plot_first_order(after_sub_7_df)
-        # fig_plot_how_many_days_after_sub = plot_how_many_days_after_sub(merged_df)
-        # fig_plot_gift_and_not = plot_gift_and_not(after_sub_7_df, sub_df)
-        # fig_plot_price_distribution = plot_price_distribution(merged_df)
-        # fig_plot_simple_and_complex_order = plot_simple_and_complex_order(merged_df)
-        # fig_plot_nb_cmd_by_customer_10_less = plot_nb_cmd_by_customer_10_less(nb_cmd_alltime_df)
-        # fig_plot_nb_cmd_by_customer_10_more = plot_nb_cmd_by_customer_10_more(nb_cmd_alltime_df)
-        # fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Full Member')
-        # fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Not Full Member')
-        # fig_plot_renew_churn_metrics = plot_renew_churn_metrics(merged_df)
 
 
 

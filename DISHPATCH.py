@@ -4178,7 +4178,7 @@ def plot_nb_cmd_by_customer_10_less(df):
     plt.ylabel(f'Number of Customers \n Total : {len(nb_cmd_alltime_df)}')
     plt.title('Number of Orders by Customer')
 
-    plt.show()
+    return fig
 
 # %%
 def plot_nb_cmd_by_customer_10_more(df):
@@ -4223,7 +4223,8 @@ def plot_nb_cmd_by_customer_10_more(df):
     plt.ylabel(f'Number of Customers \n Total : {len(nb_cmd_alltime_df)}')
     plt.title('Number of Orders by Customer (more than 10 orders)')
 
-    plt.show()
+    # plt.show()
+    return fig
 
 # %%
 def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
@@ -4301,7 +4302,8 @@ def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+    return fig
 
 
 # %%
@@ -4411,7 +4413,8 @@ def plot_renew_churn_metrics(df):
     ax4.grid(True, axis='y', linestyle='--', alpha=0.7)
 
 
-    plt.show()
+    # plt.show()
+    return fig
 
 # %%
 from reportlab.lib.pagesizes import A3, landscape
