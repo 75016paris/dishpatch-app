@@ -3658,14 +3658,27 @@ def merging_order_df_with_short_sub_df(order_df, short_sub_df):
 
 # %%
 def creating_year_col(df):
+    # Sauvegarder les colonnes originales pour les restaurer à la fin
+    original_date = df['date'].copy()
+    original_created_utc = df['created_utc'].copy()
+
+    # Convertir temporairement en datetime64[ns] pour les comparaisons
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df['created_utc'] = pd.to_datetime(df['created_utc'], errors='coerce')
+
+    # Créer start_y2 et start_y3
     df['start_y2'] = df['created_utc'] + pd.DateOffset(years=1)
     df['start_y3'] = df['created_utc'] + pd.DateOffset(years=2)
 
-    df['before_sub'] = df['date'] < df['created_utc']
-    df['in_y1'] = (df['date'] < df['start_y2']) & (df['date'] >= df['created_utc'])
-    df['in_y2'] = (df['date'] < df['start_y3']) & (df['date'] >= df['start_y2'])
-    df['in_y3'] = (df['date'] > df['start_y3'])
+    # Effectuer les comparaisons et gérer les NaT
+    df['before_sub'] = (df['date'] < df['created_utc']).fillna(False)
+    df['in_y1'] = ((df['date'] < df['start_y2']) & (df['date'] >= df['created_utc'])).fillna(False)
+    df['in_y2'] = ((df['date'] < df['start_y3']) & (df['date'] >= df['start_y2'])).fillna(False)
+    df['in_y3'] = (df['date'] > df['start_y3']).fillna(False)
 
+    # Restaurer les colonnes originales au format datetime.date
+    df['date'] = original_date
+    df['created_utc'] = original_created_utc
 
     return df
 
