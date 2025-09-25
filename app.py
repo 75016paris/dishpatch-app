@@ -76,6 +76,8 @@ st.markdown("""
 
 # Download file
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
+uploaded_file2 = st.file_uploader("Upload the orders csv", type="csv")
+uploaded_file3 = st.file_uploader("Upload the product csv", type="csv")
 
 if uploaded_file:
     with st.spinner('🔄 Processing your data... This may take a moment.'):
