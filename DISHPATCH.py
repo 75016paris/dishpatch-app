@@ -3813,7 +3813,8 @@ def plot_how_many_days_after_sub(df):
     plt.xticks(rotation=0)
     plt.ylabel('Percentage of Customers (%)')
     plt.title('How many days before first order after subscription')
-    plt.show()
+    #plt.show()
+    return fig
 
 # %%
 def plot_gift_and_not(df, sub_df):
