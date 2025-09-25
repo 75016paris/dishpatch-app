@@ -3413,6 +3413,981 @@ def plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last
 #fig, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
 
 # %%
+def preprocess_order(df):
+
+    # Convertir les colonnes contenant '(UTC)' en datetime
+    date_cols = [col for col in df.columns if '(UTC)' in col]
+    for col in date_cols:
+        df[col] = pd.to_datetime(df[col], errors='coerce', utc=True)
+
+    # Sélectionner les colonnes pertinentes
+    columns_to_keep = [
+        'Name', 'Paid at', 'Subtotal', 'Discount Amount', 'Note Attributes',
+        'Lineitem quantity', 'Vendor', 'Lookup', 'Lineitem name'
+    ]
+
+    df = df[columns_to_keep]
+
+    # Renommer les colonnes
+    df = df.rename(columns={
+        'Paid at': 'date',
+        'Subtotal': 'subtotal',
+        'Discount Amount': 'discount',
+        'Note Attributes': 'note',
+        'Lineitem quantity': 'qty',
+        'Vendor': 'vendor',
+        'Lookup': 'customer_name',
+        'Lineitem name': 'item',
+        'Name': 'cmd'
+    })
+
+    df['date'] = pd.to_datetime(df['date'], utc=True)
+    df['date'] = pd.to_datetime(df['date']).dt.date
+
+    df = df[df['vendor'] != 'Dishpatch']
+    df = df[df['vendor'].notna()]
+
+    return df
+
+# %%
+def split_name_and_delivery(item_name):
+    # Match the pattern: item_name - delivery_date
+    match = re.match(r'^(.*?) - (.*)$', item_name)
+    if match:
+        item_clean = match.group(1).strip()  # Part before ' - '
+        delivery_date = match.group(2).strip()  # Part after ' - '
+        return item_clean, delivery_date
+    else:
+        # If no ' - ' is found, return the original name and None for delivery_date
+        return item_name.strip(), None
+
+# %%
+def order_grouping(df):
+
+    df['cmd_nb'] = 1
+
+    order_group_cmd_df = df.groupby('cmd').agg({'date': 'first', 'note': 'first', 'cmd_nb': 'sum'})
+    order_group_cmd_df = order_group_cmd_df[order_group_cmd_df['date'].notna()]
+
+    df = df.merge(order_group_cmd_df, on='cmd', how='right')
+
+    # Renaming columns after the merge
+    df = df[['customer_name', 'cmd', 'date_y', 'vendor', 'item', 'qty', 'note_y', 'cmd_nb_y']]
+    df = df.rename(columns={'date_y': 'date', 'note_y': 'note', 'cmd_nb_y': 'cmd_nb'})
+
+    df['is_complex'] = df['cmd_nb'] > 1
+
+    return df
+
+# %%
+def flag_gift_and_note(df):
+    # Flagging Gift & Note
+    df['is_gift'] = df['note'].str.contains(r'isGift: true', na=False)
+    df['have_note'] = df['note'].str.contains(r'isGift:\s*true\ngiftMessage:\s*\S+', na=False)
+    # Override any "giftMessage: false" to False
+    df.loc[df['note'].str.contains(r'\ngiftMessage:\s*false', na=False), 'have_note'] = False
+
+    # Loosing the original note column
+    df = df.drop(columns='note')
+
+    return df
+
+
+# %%
+def clean_and_enrich_order_data(df):
+
+    # Clean item name
+    cleaned_data = [split_name_and_delivery(item) for item in df['item']]
+    order_df_cleaned = pd.DataFrame(cleaned_data, columns=['item_name', 'delivery_date'])
+
+    # Add the new columns to the original df
+    df[['item_name', 'delivery_date']] = order_df_cleaned
+
+
+    return df
+
+
+# %%
+def item_name_cleaning(df):
+    # michel-roux-jr
+    df.loc[df['item_name'] == 'Bouef Bourguignon Classique', 'item_name'] = 'Boeuf Bourguignon Classique'
+
+    #michel roux consolidating (there were prices for both but seems to be the same)
+    df.loc[df['item_name'] == "Valentine’s Dinner à Deux", 'item_name'] = "Valentine's Dinner à Deux"
+    df.loc[df['item_name'] == "Michel’s French Feast", 'item_name'] = "Michel's French Feast"
+    df.loc[df['item_name'] == "Easter Braised Lamb Banquet", 'item_name'] = "Easter Lamb Banquet"
+
+    # cafe murano
+    df.loc[df['item_name'] == 'Torta di Nocciole', 'item_name'] = 'Italian Chocolate & Hazelnut Torte'
+    df.loc[df['item_name'] == 'Bistecca alla Fiorentina (delivering from 28th March)', 'item_name'] = 'Bistecca alla Fiorentina'
+    df.loc[df['item_name'] == 'Bistecca alla Fiorentina (delivering from 13th June)', 'item_name'] = 'Bistecca alla Fiorentina'
+    df.loc[df['item_name'] == 'Autumn Baked Gnocchi', 'item_name'] = 'Baked Gnocchi Supper'
+    df.loc[df['item_name'] == 'Slow-Roast Pork & Fennel', 'item_name'] = 'Italian Porchetta Feast'
+    df.loc[df['item_name'] == "Angela's Easter Porchetta", 'item_name'] = "Angela's Porchetta"
+
+    #sabrina-ghayour
+    df.loc[df['item_name'] == 'Spiced Feta & Chickpea Bastilla (delivering from 21st March)', 'item_name'] = 'Spiced Feta & Chickpea Bastilla'
+    df.loc[df['item_name'] == 'A Celebration of Persiana', 'item_name'] = 'Persiana Summer Mezze'
+    df.loc[df['item_name'] == 'Spiced Chickpea & Feta Bastilla', 'item_name'] = 'Spiced Feta & Chickpea Bastilla'
+
+    # empire-empire
+    df.loc[df['item_name'] == "Biryani Wazwan Feast (delivering from 4th April)", 'item_name'] = "Biryani Wazwan Feast"
+
+    # Rick Stein
+    df.loc[df['item_name'] == "Winter Seafood Supper", 'item_name'] = "Stein's Seafood Supper"
+    # hard to find the equivalent for Tuna, just took Cornish Summer Sole as price almost same and similar product at Rick Stein
+    df.loc[df['item_name'] == "Tuna Steaks & Scallops", 'item_name'] = "Cornish Summer Sole"
+    df.loc[df['item_name'] == "Seared Tuna In Red Wine", 'item_name'] = "Cornish Summer Sole"
+
+    # st-john
+    df.loc[df['item_name'] == "St. JOHN Crémant de Limoux 2020", 'item_name'] = "St. JOHN Crémant de Limoux 2021"
+    df.loc[df['item_name'] == "St. JOHN Picpoul 2022", 'item_name'] = "St. JOHN Picpoul de Pinet 2024"
+    df.loc[df['item_name'] == "St. JOHN Picpoul de Pinet 2023", 'item_name'] = "St. JOHN Picpoul de Pinet 2024"
+    df.loc[df['item_name'] == "St. JOHN Mâcon-Village 2020", 'item_name'] = "St. JOHN Mâcon-Village 2022"
+    df.loc[df['item_name'] == "St. JOHN Festive Reds", 'item_name'] = "St. JOHN Summer Wines"
+
+    #richard-corrigan
+    df.loc[df['item_name'] == "Corrigan's Summertime Supper", 'item_name'] = "Corrigan's Springtime Supper"
+    df.loc[df['item_name'] == "Corrigan's Autumn Pork", 'item_name'] = "Sugar Pit Pork"
+    df.loc[df['item_name'] == "Springtime Irish Stew", 'item_name'] = "Spring Irish Lamb"
+
+    #paul-ainsworth
+    df.loc[df['item_name'] == "Shrimp Brown Butter Monkfish", 'item_name'] = "Shellfish Brown Butter Monkfish"
+
+    #atul-kochhar
+    df.loc[df['item_name'] == "Kadhai Chicken Feast", 'item_name'] = "Goan-Spiced Feast"
+
+    #jose-pizarro
+    df.loc[df['item_name'] == "x8 Jamón Croquetas (With oil)", 'item_name'] = "x8 Jamón Croquetas"
+    df.loc[
+        df['item_name'].str.contains(r"^Castilian Suckling Lamb \(delivering from", na=False),
+        'item_name'
+    ] = "Castilian Suckling Lamb"
+
+    #georgina-hayden
+    df.loc[df['item_name'] == "Trip To Greece", 'item_name'] = "The Greek Islands"
+
+    #el-pastor
+    df.loc[df['item_name'] == 'Taco Party: "Contramar" Sea Bream', 'item_name'] = 'Taco Party: Beef Short Rib'
+
+
+    #andi-oliver
+    df.loc[df['item_name'] == "Caribbean Rum & Ginger Pork", 'item_name'] = "Rum & Ginger Pork Belly"
+    #additional special cases below
+
+    return df
+
+
+# %%
+def preprocess_product(df):
+    df = df[['Title', 'Vendor', 'Variant Price', 'Option1 Value', 'Status']]
+    df = df.drop_duplicates(subset=['Title'], keep='first')
+
+    return df
+
+
+# %%
+def pricing_items(order_df, product_df):
+    order_df['price'] = False
+
+    order_df = order_df.merge(product_df[['Title', 'Variant Price']], left_on='item_name', right_on='Title', how='left')
+
+    order_df['price'] = order_df['Variant Price'].combine_first(order_df['price'])
+    order_df = order_df.drop(columns=['Title', 'Variant Price'])
+    order_df['items_price'] = order_df['price'] * order_df['qty']
+
+    return order_df
+
+# %%
+def renew_churn_status(df, renewal_dict):
+    renewed_to_y2_df = renewal_dict['renewed_to_y2_df']
+    customer_in_y2_df = renewal_dict['customer_in_y2_df']
+
+
+    # Calculate churn_y2_df as those eligible for Y2 but not renewed to Y2
+    churn_y2_df = customer_in_y2_df[~customer_in_y2_df['customer_name'].isin(renewed_to_y2_df['customer_name'])]
+
+
+    sub_df['renewed_to_y2'] = sub_df['customer_name'].isin(renewed_to_y2_df['customer_name'])
+    sub_df['churn_to_y2'] = sub_df['customer_name'].isin(churn_y2_df['customer_name'])
+
+
+
+    return df
+
+# %%
+def creating_short_sub_df(sub_df):
+    df = sub_df.sort_values('created_utc', ascending=True)
+    df = df.groupby('customer_name').agg({'created_utc':'first',
+                                          'status': 'last',
+                                          'is_full_member': 'last',
+                                          'paid_duration': 'last',
+                                          'renewed_to_y2':'any',
+                                          'churn_to_y2':'any'})
+    df = df.reset_index()
+
+    df['created_utc'] = pd.to_datetime(df['created_utc']).dt.date
+
+    return df
+
+
+# %%
+def merging_order_df_with_short_sub_df(order_df, short_sub_df):
+    # Perform left merge to keep all orders from order_df
+    df = order_df.merge(short_sub_df, on='customer_name', how='left')
+
+    # Sort by date
+    df = df.sort_values('date')
+
+    # Fill NaN for columns from short_sub_df
+    df['is_full_member'] = df['is_full_member'].fillna(False).astype(bool)
+    df['status'] = df['status'].fillna('inactive')
+    df['paid_duration'] = df['paid_duration'].fillna(0)
+    df['renewed_to_y2'] = df['renewed_to_y2'].fillna(False).astype(bool)
+    df['churn_to_y2'] = df['churn_to_y2'].fillna(False).astype(bool)
+
+    df['created_utc'] = pd.to_datetime(df['created_utc'], errors='coerce')
+    first_dates = df.groupby('customer_name')['date'].first()
+    df['created_utc'] = df['created_utc'].fillna(df['customer_name'].map(first_dates))
+
+    df['created_utc'] = pd.to_datetime(df['created_utc']).dt.date
+
+    return df
+
+
+# %%
+def creating_year_col(df):
+    df['start_y2'] = df['created_utc'] + pd.DateOffset(years=1)
+    df['start_y3'] = df['created_utc'] + pd.DateOffset(years=2)
+
+    df['before_sub'] = df['date'] < df['created_utc']
+    df['in_y1'] = (df['date'] < df['start_y2']) & (df['date'] >= df['created_utc'])
+    df['in_y2'] = (df['date'] < df['start_y3']) & (df['date'] >= df['start_y2'])
+    df['in_y3'] = (df['date'] > df['start_y3'])
+
+
+    return df
+
+
+# %%
+def split_by_year(df):
+    in_y0 = df[df['before_sub'] == True]
+    in_y1 = df[df['in_y1'] == True]
+    in_y2 = df[df['in_y2'] == True]
+    in_y3 = df[df['in_y3'] == True]
+
+    return in_y0, in_y1, in_y2, in_y3
+
+# %%
+def split_by_full_member_status(df):
+    df_full = df[df['is_full_member'] == True]
+    df_not_full = df[df['is_full_member'] == False]
+
+    return df_full, df_not_full
+
+# %%
+def after_sub_7(df):
+
+    # Select only orders placed after the subscription date, and within 7 days after subscription
+    after_sub_7_df = df[
+        (df['date'] >= df['created_utc']) &
+        (df['date'] <= (df['created_utc'] + pd.Timedelta(days=7)))]
+
+    # Get the first order (vendor / gift / note) after subscription (+7 days) for each customer
+    after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({
+        'vendor': 'first',
+        'is_full_member': 'first',
+        'date':'first',
+        'is_gift':'first',
+        'have_note':'first'})
+
+    return after_sub_7_df
+
+# %%
+def plot_first_order(df):
+
+    # Separate full & not full members
+    after_sub_plus7_df_full, after_sub_plus7_df_notfull = split_by_full_member_status(df)
+
+
+    # Get normalized vendor distributions
+    full_counts = after_sub_plus7_df_full['vendor'].value_counts(normalize=True)
+    notfull_counts = after_sub_plus7_df_notfull['vendor'].value_counts(normalize=True)
+
+    # Sort vendors by proportion (descending) for full members
+    vendors_sorted = full_counts.sort_values(ascending=False).index.tolist()
+
+    # Ensure all vendors are present (even if absent in one group)
+    all_vendors = list(vendors_sorted)
+    for v in notfull_counts.index:
+        if v not in all_vendors:
+            all_vendors.append(v)
+
+    # Get values in sorted order and convert to percentage
+    full_vals = [full_counts.get(v, 0) * 100 for v in all_vendors]
+    notfull_vals = [notfull_counts.get(v, 0) * 100 for v in all_vendors]
+
+    x = range(len(all_vendors))
+    width = 0.4
+
+
+
+    first_order_plot = plt.figure(figsize=(22, 13))
+    # Plot bars for Full Members
+    full_bars = plt.bar([i - width/2 for i in x], full_vals, width=width, label='Full Member', color='blue', alpha=0.7)
+    # Plot bars for Not Full Members
+    notfull_bars = plt.bar([i + width/2 for i in x], notfull_vals, width=width, label='Not Full Member', color='red', alpha=0.7)
+
+    # Add percentage labels above the bars
+    for i, bar in enumerate(full_bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{full_vals[i]:.1f}%',
+                ha='center', va='bottom', fontsize=10, rotation=50, color='blue', alpha=0.7 )
+
+    for i, bar in enumerate(notfull_bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2 + 0.1, height + 0.1, f'{notfull_vals[i]:.1f}%',
+                ha='center', va='bottom', fontsize=10, rotation=50, color='red', alpha=0.7)
+
+    plt.xticks(x, all_vendors, rotation=90)
+    plt.xlabel('Vendor')
+    plt.ylabel('Percentage (%)')
+    plt.title('FIRST ORDER AFTER SUBSCRIPTION (+7 days) by Vendors')
+    plt.legend()
+    plt.show()
+
+# %%
+def plot_how_many_days_after_sub(df):
+    df['days_since_subscription'] = (df['date'] - df['created_utc']).dt.days
+
+    # Filter for orders within 0 to 7 days after subscription
+    days_since_subscription_df = df[(df['days_since_subscription'] <= 7) & (df['days_since_subscription'] >= 0)]
+
+    # Get the first days_since_subscription for each customer
+    # #### 'days_since_subscription': 'min' OR 'first' ?? ####
+    days_since_subscription_df = days_since_subscription_df.groupby('customer_name').agg({'days_since_subscription': 'min', 'is_full_member':'first'})
+
+    # Calculate the frequency and normalize to percentages
+    counts = days_since_subscription_df['days_since_subscription'].value_counts(normalize=True).sort_index() * 100
+
+    # Plot the bar chart
+    fig, ax = plt.subplots(figsize=(10, 6))
+    counts.plot.bar(ax=ax)
+
+    # Add percentage labels above the bars
+    for i, bar in enumerate(ax.patches):
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + 0.1,
+            f'{counts.iloc[i]:.1f}%',
+            ha='center',
+            va='bottom',
+            fontsize=10,
+        )
+
+    plt.xlabel('Days Since Subscription')
+    plt.xticks(rotation=0)
+    plt.ylabel('Percentage of Customers (%)')
+    plt.title('How many days before first order after subscription')
+    plt.show()
+
+# %%
+def plot_gift_and_not(df, sub_df):
+    first_order_full_df_gift, first_order_notfull_df_gift = split_by_full_member_status(df)
+
+    # Get value counts for first orders
+    is_gift_first = df['is_gift'].value_counts()
+    have_note_first = df['have_note'].value_counts()
+
+    is_gift_full_first = first_order_full_df_gift['is_gift'].value_counts()
+    is_gift_notfull_first = first_order_notfull_df_gift['is_gift'].value_counts()
+
+    have_note_full_first = first_order_full_df_gift['have_note'].value_counts()
+    have_note_notfull_first = first_order_notfull_df_gift['have_note'].value_counts()
+
+    groups = ['Is Gift? (First Orders)', 'Have Note? (First Orders)']
+
+    # Convert value counts to lists, handling missing True/False
+    # is_gift_first_list = [is_gift_first.get(False, 0), is_gift_first.get(True, 0)]
+    is_gift_full_first_list = [is_gift_full_first.get(False, 0), is_gift_full_first.get(True, 0)]
+    is_gift_notfull_first_list = [is_gift_notfull_first.get(False, 0), is_gift_notfull_first.get(True, 0)]
+
+    # have_note_first_list = [have_note_first.get(False, 0), have_note_first.get(True, 0)]
+    have_note_full_first_list = [have_note_full_first.get(False, 0), have_note_full_first.get(True, 0)]
+    have_note_notfull_first_list = [have_note_notfull_first.get(False, 0), have_note_notfull_first.get(True, 0)]
+
+    # Calculate percentages for full and not-full members
+    full_member_percs = [
+        is_gift_full_first_list[1] / (is_gift_full_first_list[1] + is_gift_full_first_list[0]) * 100 if (is_gift_full_first_list[1] + is_gift_full_first_list[0]) > 0 else 0,
+        have_note_full_first_list[1] / (have_note_full_first_list[1] + have_note_full_first_list[0]) * 100 if (have_note_full_first_list[1] + have_note_full_first_list[0]) > 0 else 0
+    ]
+    notfull_member_percs = [
+        is_gift_notfull_first_list[1] / (is_gift_notfull_first_list[1] + is_gift_notfull_first_list[0]) * 100 if (is_gift_notfull_first_list[1] + is_gift_notfull_first_list[0]) > 0 else 0,
+        have_note_notfull_first_list[1] / (have_note_notfull_first_list[1] + have_note_notfull_first_list[0]) * 100 if (have_note_notfull_first_list[1] + have_note_notfull_first_list[0]) > 0 else 0
+    ]
+
+    # Raw counts for True values
+    full_member_counts = [is_gift_full_first_list[1], have_note_full_first_list[1]]
+    notfull_member_counts = [is_gift_notfull_first_list[1], have_note_notfull_first_list[1]]
+
+    # Create figure with two subplots side by side
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 8), gridspec_kw={'width_ratios': [2, 1]})
+
+    # Left Plot: Gift and Note Distribution
+    x = np.arange(len(groups))
+    width = 0.35
+
+    # Plot bars side by side
+    bars1 = ax1.bar(x - width/2, full_member_percs, width, color='blue', alpha=0.7, label='Full Member')
+    bars2 = ax1.bar(x + width/2, notfull_member_percs, width, color='red', alpha=0.7, label='Not Full Member')
+
+    # Add percentage labels above bars
+    for i, bar in enumerate(bars1):
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, height, f'{full_member_percs[i]:.1f}%',
+                ha='center', va='bottom', fontsize=10)
+
+    for i, bar in enumerate(bars2):
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, height, f'{notfull_member_percs[i]:.1f}%',
+                ha='center', va='bottom', fontsize=10)
+
+    # Add raw counts inside bars
+    for i, bar in enumerate(bars1):
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, height/2, f'{int(full_member_counts[i])}',
+                ha='center', va='center', fontsize=10, color='white', weight='bold')
+
+    for i, bar in enumerate(bars2):
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, height/2, f'{int(notfull_member_counts[i])}',
+                ha='center', va='center', fontsize=10, color='white', weight='bold')
+
+    # Add conversion rates inside/above bars
+    for i, bar in enumerate(bars1):
+        total = full_member_counts[i] + notfull_member_counts[i]
+        conv_rate = full_member_counts[i] / total * 100 if total > 0 else 0
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.15,
+                f'{conv_rate:.1f}%', ha='center', va='bottom', fontsize=9, color='blue')
+
+    for i, bar in enumerate(bars2):
+        total = full_member_counts[i] + notfull_member_counts[i]
+        conv_rate = notfull_member_counts[i] / total * 100 if total > 0 else 0
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.15,
+                f'{conv_rate:.1f}%', ha='center', va='bottom', fontsize=9, color='red')
+
+    # Customize the left plot
+    ax1.set_title('Distribution of Gift and Note (First Orders)')
+    total_first_orders = sum(is_gift_full_first_list) + sum(is_gift_notfull_first_list)
+    ax1.set_xlabel(f'First Orders: {total_first_orders}')
+    ax1.set_ylabel('% of Orders')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(groups, rotation=0, ha='center')
+    ax1.legend()
+    ax1.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax1.set_ylim(0, 8)  # Set y-axis limit
+
+
+    # Right Plot: Full vs Not-Full Member Distribution
+    full_or_not = sub_df.groupby('customer_name').agg({'is_full_member': 'any'})
+    member_counts = full_or_not['is_full_member'].value_counts(normalize=True) * 100
+    member_counts = member_counts.reindex([True, False], fill_value=0)  # Ensure both True/False are present
+
+
+    # x2 = np.arange(2)
+    # bars = ax2.bar(x2, [member_counts[True], member_counts[False]],
+    #             width=0.35, color=['blue', 'red'], alpha=0.7)
+
+    # for i, bar in enumerate(bars):
+    #     height = bar.get_height()
+    #     ax2.text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{height:.1f}%',
+    #             ha='center', va='bottom', fontsize=10)
+
+    #     raw_count = int(height / 100 * len(full_or_not))
+    #     ax2.text(bar.get_x() + bar.get_width()/2, height / 2, f'{raw_count}',
+    #             ha='center', va='center', fontsize=10, color='white', weight='bold')
+
+    x2 = np.arange(2)
+    bars = ax2.bar(x2 - 0.25, [member_counts[True], member_counts[False]],
+                   width=0.5, color=['blue', 'red'], alpha=0.7)
+
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        ax2.text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{height:.1f}%',
+                ha='center', va='bottom', fontsize=10)
+
+        raw_count = int(height / 100 * len(full_or_not))
+        ax2.text(bar.get_x() + bar.get_width()/2, height / 2, f'{raw_count}',
+                ha='center', va='center', fontsize=10, color='white', weight='bold')
+
+
+    # Customize the right plot
+    ax2.set_title('Conversion rate')
+    ax2.set_xlabel(f'Total Customers: {len(full_or_not)}')
+    ax2.set_ylabel('% of Customers')
+    ax2.set_xticks(x2)
+    ax2.set_xticklabels(['Full Member', 'Not Full Member'], rotation=0, ha='center')
+    ax2.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax2.set_ylim(0, 80)  # Set y-axis limit
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    plt.show()
+
+
+# %%
+def plot_price_distribution(df):
+    first_value = df[
+        (df['date'] >= df['created_utc']) &
+        (df['date'] <= (df['created_utc'] + pd.Timedelta(days=7)))]
+
+
+    first_value = first_value.groupby('cmd').agg({'items_price': 'sum', 'customer_name': 'first', 'is_full_member': 'first', 'date': 'first'})
+
+    first_value = first_value.sort_values('date')
+
+    def price_category(x):
+        if x < 90:
+            return '<90£'
+        elif x < 180:
+            return '>=90£ & <=180£'
+        else:
+            return '>180£'
+
+    first_value['order_values'] = first_value['items_price'].apply(price_category)
+
+    first_value = first_value.groupby('customer_name').agg({'is_full_member': 'first', 'items_price': 'first', 'order_values': 'first'})
+
+    first_value_full = first_value[first_value['is_full_member'] == True]
+    order_counts_full = first_value_full['order_values'].value_counts()
+
+    first_value_notfull = first_value[first_value['is_full_member'] == False]
+    order_counts_notfull = first_value_notfull['order_values'].value_counts()
+
+
+
+
+    full_min_cmd_price = first_value_notfull['items_price'].min()
+    full_max_cmd_price = first_value_notfull['items_price'].max()
+    full_mean_cmd_price = first_value_notfull['items_price'].mean()
+    full_median_cmd_price = first_value_notfull['items_price'].median()
+
+    notfull_min_cmd_price = first_value_notfull['items_price'].min()
+    notfull_max_cmd_price = first_value_notfull['items_price'].max()
+    notfull_mean_cmd_price = first_value_notfull['items_price'].mean()
+    notfull_median_cmd_price = first_value_notfull['items_price'].median()
+
+    order_counts_full = first_value_full['order_values'].value_counts()
+    order_counts_notfull = first_value_notfull['order_values'].value_counts()
+
+    # Ensure both have the same index (categories: 'small', 'med', 'big')
+    categories = ['<90£', '>=90£ & <=180£', '>180£']
+    order_counts_full = order_counts_full.reindex(categories, fill_value=0)
+    order_counts_notfull = order_counts_notfull.reindex(categories, fill_value=0)
+
+    # Set up bar positions
+    x = np.arange(len(categories))  # [0, 1, 2]
+    width = 0.35  # Width of each bar
+
+    # Create figure and axis
+    fig, ax = plt.subplots()
+
+    # Plot bars
+    bars_full = ax.bar(x - width/2, order_counts_full, width, color='blue', alpha=0.7, label='Full Member')
+    bars_notfull = ax.bar(x + width/2, order_counts_notfull, width, color='red', alpha=0.7, label='Not Full Member')
+
+    # Total counts (for percentage calculation)
+    total_full = order_counts_full.sum()
+    total_notfull = order_counts_notfull.sum()
+
+    # Add absolute values inside bars and percentages above
+    for i, bar in enumerate(bars_full):
+        height = bar.get_height()
+        # Absolute value (inside bar)
+        ax.text(bar.get_x() + bar.get_width()/2, height / 2,
+                f'{int(height)}', ha='center', va='center',
+                fontsize=10, color='white', weight='bold')
+        # Percentage (above bar)
+        perc = (height / total_full * 100) if total_full > 0 else 0
+        ax.text(bar.get_x() + bar.get_width()/2, height + 1,
+                f'{perc:.1f}%', ha='center', va='bottom',
+                fontsize=10, color='blue')
+
+    for i, bar in enumerate(bars_notfull):
+        height = bar.get_height()
+        # Absolute value (inside bar)
+        ax.text(bar.get_x() + bar.get_width()/2, height / 2,
+                f'{int(height)}', ha='center', va='center',
+                fontsize=10, color='white', weight='bold')
+        # Percentage (above bar)
+        perc = (height / total_notfull * 100) if total_notfull > 0 else 0
+        ax.text(bar.get_x() + bar.get_width()/2, height + 1,
+                f'{perc:.1f}%', ha='center', va='bottom',
+                fontsize=10, color='red')
+
+    # Customize plot
+    ax.set_title("Distribution orders by price category (first order after subscription + 7days)")
+    ax.set_ylabel("Number of Orders")
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories)
+    ax.legend()
+
+
+    plt.show()
+
+
+# %%
+def plot_simple_and_complex_order(df):
+
+
+    # Get value counts and ensure both categories are present
+    value_counts = df['is_complex'].value_counts().sort_index()
+    # Ensure both 0 and 1 are present
+    value_counts = value_counts.reindex([0, 1], fill_value=0)
+    labels = ['Simple', 'Complex']
+    colors = ['green', 'orange']
+
+    fig, ax = plt.subplots()
+    wedges, texts, autotexts = ax.pie(
+        value_counts,
+        autopct='%1.1f%%',
+        labels=labels,
+        colors=colors,
+        textprops={'color': 'white', 'fontsize': 12, 'weight': 'bold'},
+        startangle=90
+    )
+
+    # Set title
+    ax.set_title('Simple vs Complex Orders')
+
+    # Add comment below the plot
+    fig.text(
+        0.5, 0.01,
+        'Complex orders have multiple types of items (from various vendors or same vendor), \n simple orders have only one type of item',
+        ha='center', va='bottom', fontsize=10, wrap=True
+    )
+
+    # Add legend
+    ax.legend(wedges, labels, title="Order Type", loc="center left", bbox_to_anchor=(1, 0.5))
+
+    plt.tight_layout()
+    plt.show()
+
+
+# %%
+def find_nb_cmd(df):
+    # First aggregation: Group by command to get order details
+    nb_cmd_alltime_df = df.groupby('cmd').agg({
+    'items_price': 'sum',
+    'customer_name': 'first',
+    'is_full_member': 'first',
+    'before_sub': 'first',
+    'in_y1': 'first',
+    'in_y2': 'first',
+    'in_y3': 'first'})
+
+    nb_cmd_alltime_df['cmd'] = nb_cmd_alltime_df.index
+
+    # Second aggregation: Group by customer to get command counts and means
+    nb_cmd_alltime_df = nb_cmd_alltime_df.groupby('customer_name').agg({
+        'items_price': 'mean',
+        'cmd': 'count',
+        'is_full_member': 'first',
+        'before_sub': 'first',
+        'in_y1': 'first',
+        'in_y2': 'first',
+        'in_y3': 'first'
+    })
+
+    nb_cmd_alltime_df = nb_cmd_alltime_df.rename(columns={'items_price': 'cmd_price_mean', 'cmd': 'total_cmd'})
+
+    return nb_cmd_alltime_df
+
+
+# %%
+def plot_nb_cmd_by_customer_10_less(df):
+    nb_cmd_alltime_df = df
+
+    def group_cmd(cmd):
+        return str(cmd) if cmd <= 10 else '>10'
+
+    # Apply grouping to both full and not-full datasets
+    nb_cmd_alltime_df['cmd_grouped'] = nb_cmd_alltime_df['total_cmd'].apply(group_cmd)
+
+    # Split by full member status
+    full_df, notfull_df = split_by_full_member_status(nb_cmd_alltime_df)
+
+    # Get value counts for cmd_grouped and sort
+    full_counts = full_df['cmd_grouped'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+    notfull_counts = notfull_df['cmd_grouped'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+
+    # Ensure both share the same categories
+    all_indexes = sorted(set(full_counts.index).union(set(notfull_counts.index)), key=lambda x: int(x) if x != '>10' else 11)
+    full_counts = full_counts.reindex(all_indexes, fill_value=0)
+    notfull_counts = notfull_counts.reindex(all_indexes, fill_value=0)
+
+    # Create DataFrame for plotting
+    combined_df = pd.DataFrame({
+        'cmd': all_indexes,
+        'Full Member': full_counts.values,
+        'Not Full Member': notfull_counts.values
+    })
+
+    # Melt to long format for seaborn
+    plot_df = combined_df.melt(id_vars='cmd', var_name='Membership', value_name='Count')
+
+    # Define custom colors with alpha
+    palette = {
+        'Full Member': (0.2, 0.4, 1.0, 0.7),  # Blue
+        'Not Full Member': (1.0, 0.2, 0.2, 0.7)  # Red
+    }
+
+    # Plot
+    fig = plt.figure(figsize=(12, 6))
+    ax = sns.barplot(data=plot_df, x='cmd', y='Count', hue='Membership', palette=palette)
+
+    # Customization
+    plt.xlabel('Number of Orders (all time)')
+    plt.ylabel(f'Number of Customers \n Total : {len(nb_cmd_alltime_df)}')
+    plt.title('Number of Orders by Customer')
+
+    plt.show()
+
+# %%
+def plot_nb_cmd_by_customer_10_more(df):
+    nb_cmd_alltime_df = df
+
+    nb_cmd_alltime_df = nb_cmd_alltime_df[nb_cmd_alltime_df['total_cmd'] > 10]
+
+    # Split by full member status
+    full_df, notfull_df = split_by_full_member_status(nb_cmd_alltime_df)
+
+    # Get value counts for cmd_grouped and sort
+    full_counts = full_df['total_cmd'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+    notfull_counts = notfull_df['total_cmd'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+
+    # Ensure both share the same categories
+    all_indexes = sorted(set(full_counts.index).union(set(notfull_counts.index)), key=lambda x: int(x) if x != '>10' else 11)
+    full_counts = full_counts.reindex(all_indexes, fill_value=0)
+    notfull_counts = notfull_counts.reindex(all_indexes, fill_value=0)
+
+    # Create DataFrame for plotting
+    combined_df = pd.DataFrame({
+        'cmd': all_indexes,
+        'Full Member': full_counts.values,
+        'Not Full Member': notfull_counts.values
+    })
+
+    # Melt to long format for seaborn
+    plot_df = combined_df.melt(id_vars='cmd', var_name='Membership', value_name='Count')
+
+    # Define custom colors with alpha
+    palette = {
+        'Full Member': (0.2, 0.4, 1.0, 0.7),  # Blue
+        'Not Full Member': (1.0, 0.2, 0.2, 0.7)  # Red
+    }
+
+    # Plot
+    fig = plt.figure(figsize=(12, 6))
+    ax = sns.barplot(data=plot_df, x='cmd', y='Count', hue='Membership', palette=palette)
+
+    # Customization
+    plt.xlabel(f'Number of Orders (all time)')
+    plt.ylabel(f'Number of Customers \n Total : {len(nb_cmd_alltime_df)}')
+    plt.title('Number of Orders by Customer (more than 10 orders)')
+
+    plt.show()
+
+# %%
+def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
+    status_title = status
+
+    if status == 'Full Member':
+        status = True
+        status_color = 'blue'
+    else:
+        status = False
+        status_color = 'red'
+
+
+    y1_df = y1_df[y1_df['is_full_member'] == status]
+    y2_df = y2_df[y2_df['is_full_member'] == status]
+
+
+    def group_cmd(cmd):
+        return cmd if cmd <= 10 else '>10'
+
+    # Apply grouping to both Year 1 and Year 2 datasets
+    y1_df['cmd_grouped'] = y1_df['total_cmd'].apply(group_cmd)
+    y2_df['cmd_grouped'] = y2_df['total_cmd'].apply(group_cmd)
+
+    # Get value counts for each group
+    y1_counts = y1_df['cmd_grouped'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+    y2_counts = y2_df['cmd_grouped'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
+
+    # Ensure both share the same categories
+    all_indexes = sorted(set(y1_counts.index).union(set(y2_counts.index)), key=lambda x: int(x) if x != '>10' else 11)
+    y1_counts = y1_counts.reindex(all_indexes, fill_value=0)
+    y2_counts = y2_counts.reindex(all_indexes, fill_value=0)
+
+    # Create figure with two subplots side by side
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6), sharey=False)
+
+    # Plot for Year 1
+    sns.barplot(x=all_indexes, y=y1_counts.values, color=status_color, alpha=0.7, ax=ax1)
+    ax1.set_title(f'N. orders for {status_title} (Year 1)')
+    ax1.set_xlabel('Number of Orders')
+    ax1.set_ylabel('Number of Customers')
+    ax1.tick_params(axis='x', rotation=45)
+
+    # Add raw counts and percentages for Year 1
+    total_y1 = y1_counts.sum()
+    for i, bar in enumerate(ax1.patches):
+        height = bar.get_height()
+        # Raw count inside bar
+        ax1.text(bar.get_x() + bar.get_width()/2, height/2, f'{int(height)}',
+                ha='center', va='center', fontsize=10, color='white', weight='bold')
+        # Percentage above bar
+        if total_y1 > 0:
+            ax1.text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{height/total_y1*100:.1f}%',
+                    ha='center', va='bottom', fontsize=10, color=status_color)
+
+    # Plot for Year 2
+    sns.barplot(x=all_indexes, y=y2_counts.values, color=status_color, alpha=0.7, ax=ax2)
+    ax2.set_title(f'N. orders for {status_title} (Year 2)')
+    ax2.set_xlabel('Number of Orders')
+    ax2.set_ylabel('Number of Customers')
+    ax2.tick_params(axis='x', rotation=45)
+
+    # Add raw counts and percentages for Year 2
+    total_y2 = y2_counts.sum()
+    for i, bar in enumerate(ax2.patches):
+        height = bar.get_height()
+        # Raw count inside bar
+        ax2.text(bar.get_x() + bar.get_width()/2, height/2, f'{int(height)}',
+                ha='center', va='center', fontsize=10, color='white', weight='bold')
+        # Percentage above bar
+        if total_y2 > 0:
+            ax2.text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{height/total_y2*100:.1f}%',
+                    ha='center', va='bottom', fontsize=10, color=status_color)
+
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    plt.show()
+
+
+# %%
+def plot_renew_churn_metrics(df):
+    # ISOLATING ORDER FROM 1ST YEAR
+    merged_y1_df = df[df['in_y1'] == True]
+
+    # ISOLATING RENEW AND CHURN
+    renew_y2_df = merged_y1_df[merged_y1_df['renewed_to_y2'] == True]
+    churn_y2_df = merged_y1_df[merged_y1_df['churn_to_y2'] == True]
+
+    # Initialize metrics
+    metrics = {
+        'Mean Number of Orders': {'Renew': 0.0, 'Churn': 0.0},
+        'Mean Order Value': {'Renew': 0.0, 'Churn': 0.0}
+    }
+    top_restaurants_renew = pd.Series(dtype=float)
+    top_restaurants_churn = pd.Series(dtype=float)
+
+    # Compute metrics for Renew
+    if not renew_y2_df.empty:
+        grp_renew_y2_df = renew_y2_df.groupby('customer_name').agg({'cmd': 'count', 'items_price': 'mean'})
+        metrics['Mean Number of Orders']['Renew'] = round(grp_renew_y2_df['cmd'].mean(), 2)
+        metrics['Mean Order Value']['Renew'] = round(grp_renew_y2_df['items_price'].mean(), 2)
+        top_restaurants_renew = renew_y2_df.groupby('customer_name').agg({'vendor': 'last'})['vendor'].value_counts(normalize=True).head(5) * 100
+
+    # Compute metrics for Churn
+    if not churn_y2_df.empty:
+        grp_churn_y2_df = churn_y2_df.groupby('customer_name').agg({'cmd': 'count', 'items_price': 'mean'})
+        metrics['Mean Number of Orders']['Churn'] = round(grp_churn_y2_df['cmd'].mean(), 2)
+        metrics['Mean Order Value']['Churn'] = round(grp_churn_y2_df['items_price'].mean(), 2)
+        top_restaurants_churn = churn_y2_df.groupby('customer_name').agg({'vendor': 'last'})['vendor'].value_counts(normalize=True).head(5) * 100
+
+    # Create figure with four subplots
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+
+    # Subplot 1: Mean Number of Orders
+    renew_value_orders = metrics['Mean Number of Orders']['Renew']
+    churn_value_orders = metrics['Mean Number of Orders']['Churn']
+    ax1.bar([0], renew_value_orders, width=0.45, label='Renew', color='blue', alpha=0.7)
+    ax1.bar([0.5], churn_value_orders, width=0.45, label='Churn', color='red', alpha=0.7)
+
+    # Add value labels
+    ax1.text(0, renew_value_orders + 0.5, f'{renew_value_orders:.2f}', ha='center', va='bottom', fontsize=10)
+    ax1.text(0.5, churn_value_orders + 0.5, f'{churn_value_orders:.2f}', ha='center', va='bottom', fontsize=10)
+
+    ax1.set_title('Mean Number of Orders')
+    ax1.set_ylabel('Orders')
+    ax1.set_xticks([0, 0.5])
+    ax1.set_xticklabels(['Renew', 'Churn'])
+    ax1.legend()
+    ax1.grid(True, axis='y', linestyle='--', alpha=0.7)
+    max_value_orders = max(renew_value_orders, churn_value_orders)
+    y_max1 = np.ceil(max_value_orders / 5) * 5
+    ax1.set_ylim(0, y_max1 + 5)
+    ax1.set_yticks(np.arange(0, y_max1 + 6, 5))
+
+    # Subplot 2: Mean Order Value
+    renew_value_price = metrics['Mean Order Value']['Renew']
+    churn_value_price = metrics['Mean Order Value']['Churn']
+    ax2.bar([0], renew_value_price, width=0.45, label='Renew', color='blue', alpha=0.7)
+    ax2.bar([0.5], churn_value_price, width=0.45, label='Churn', color='red', alpha=0.7)
+
+    # Add value labels
+    ax2.text(0, renew_value_price + 0.5, f'{renew_value_price:.2f}', ha='center', va='bottom', fontsize=10)
+    ax2.text(0.5, churn_value_price + 0.5, f'{churn_value_price:.2f}', ha='center', va='bottom', fontsize=10)
+
+    ax2.set_title('Mean Order Value')
+    ax2.set_ylabel('Value ($)')
+    ax2.set_xticks([0, 0.5])
+    ax2.set_xticklabels(['Renew', 'Churn'])
+    ax2.legend()
+    ax2.grid(True, axis='y', linestyle='--', alpha=0.7)
+    max_value_price = max(renew_value_price, churn_value_price)
+    y_max2 = np.ceil(max_value_price / 10) * 10
+    ax2.set_ylim(0, y_max2 + 5)
+    ax2.set_yticks(np.arange(0, y_max2 + 6, 10))
+
+    # Subplot 3: Top 5 Restaurants (Renew)
+    if not top_restaurants_renew.empty:
+        sns.barplot(x=top_restaurants_renew.index, y=top_restaurants_renew.values, color='blue', alpha=0.7, ax=ax3)
+        for i, bar in enumerate(ax3.patches):
+            height = bar.get_height()
+            ax3.text(bar.get_x() + bar.get_width()/2, height + 1, f'{height:.1f}%', ha='center', va='bottom', fontsize=10)
+    ax3.set_title('Top 5 vendors Leading to Renew')
+    ax3.set_ylabel('Percentage of Customers')
+    ax3.tick_params(axis='x', rotation=45)
+    max_value_renew = top_restaurants_renew.max() if not top_restaurants_renew.empty else 100
+    y_max3 = np.ceil(max_value_renew / 10) * 10
+    ax3.set_ylim(0, y_max3 + 5)
+    ax3.set_yticks(np.arange(0, y_max3 + 6, 10))
+    ax3.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    # Subplot 4: Top 5 Restaurants (Churn)
+    if not top_restaurants_churn.empty:
+        sns.barplot(x=top_restaurants_churn.index, y=top_restaurants_churn.values, color='red', alpha=0.7, ax=ax4)
+        for i, bar in enumerate(ax4.patches):
+            height = bar.get_height()
+            ax4.text(bar.get_x() + bar.get_width()/2, height + 1, f'{height:.1f}%', ha='center', va='bottom', fontsize=10)
+    ax4.set_title('Top 5 vendors Leading to Cancelation')
+    ax4.set_ylabel('Percentage of Customers')
+    ax4.tick_params(axis='x', rotation=45)
+    max_value_churn = top_restaurants_churn.max() if not top_restaurants_churn.empty else 100
+    y_max4 = np.ceil(max_value_churn / 10) * 10
+    ax4.set_ylim(0, y_max4 + 5)
+    ax4.set_yticks(np.arange(0, y_max4 + 6, 10))
+    ax4.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+
+    plt.show()
+
+# %%
 from reportlab.lib.pagesizes import A3, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle

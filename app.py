@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from DISHPATCH import preprocess_data, remove_multi_subscriptions, remove_high_volume_customers, clean_inconsistent_statuses, custom_multisub_aggregation, prepare_multisub_for_integration, integrate_with_subdf, cancel_during_trial, refund_period_end_utc, canceled_during_refund_period, full_member_status
 from DISHPATCH import paying_members, add_ended_at_utc, calculate_duration, get_full_members_count, get_iso_week_bounds, get_weeks_in_iso_year, calculate_target_iso_week, get_new_trial_last_week, get_conversion_rate_last_weeks, get_churn_members_last_week, cus_renewal, get_new_full_members_last_week
 from DISHPATCH import plot_weekly_trials_8_weeks, plot_weekly_trials_all_time, weekly_flow_8_weeks, weekly_flow_all_time, weekly_renewal_flow_8_weeks, weekly_renewal_flow_all_time, plot_cohort_conversion_funnel, plot_cohort_conversion_funnel_comparison
+##########################################################
+from DISHPATCH import preprocess_order, order_grouping, clean_and_enrich_order_data, item_name_cleaning, pricing_items, flag_gift_and_note
+from DISHPATCH import renew_churn_status, creating_short_sub_df, merging_order_df_with_short_sub_df, creating_year_col, after_sub_7, find_nb_cmd, split_by_year
+from DISHPATCH import plot_first_order, plot_how_many_days_after_sub, plot_gift_and_not, plot_price_distribution, plot_simple_and_complex_order, plot_nb_cmd_by_customer_10_less, plot_nb_cmd_by_customer_10_more, plot_nb_cmd_by_customer_y1_y2, plot_renew_churn_metrics
+
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_pdf import PdfPages
@@ -76,10 +81,11 @@ st.markdown("""
 
 # Download file
 uploaded_file = st.file_uploader("Upload the subscription csv", type="csv")
+##########################################################
 uploaded_file2 = st.file_uploader("Upload the orders csv", type="csv")
 uploaded_file3 = st.file_uploader("Upload the product csv", type="csv")
 
-if uploaded_file:
+if uploaded_file3:
     with st.spinner('🔄 Processing your data... This may take a moment.'):
         # Affichage d'une barre de progression
         status_text = st.empty()
@@ -131,6 +137,44 @@ if uploaded_file:
         fig_renewal_all_time, renewal_flow_results = weekly_renewal_flow_all_time(sub_df, today_date, today_iso)
         fig_cohort, last_cohort_dict = plot_cohort_conversion_funnel(sub_df, today_date, today_iso)
         fig_cohort_comparison, last_cohort_comparison = plot_cohort_conversion_funnel_comparison(sub_df, today_date, today_iso, last_cohort_dict)
+
+##########################################################
+        order_raw = pd.read_csv(uploaded_file2)
+        product_raw = pd.read_csv(uploaded_file3)
+
+
+        order_df = preprocess_order(order_raw)
+        order_df = order_grouping(order_df)
+        order_df = clean_and_enrich_order_data(order_df)
+        order_df = item_name_cleaning(order_df)
+        order_df = pricing_items(order_df, product_raw)
+        order_df = flag_gift_and_note(order_df)
+
+        sub_df = renew_churn_status(sub_df, renewal_dict)
+        short_sub_df = creating_short_sub_df(sub_df)
+
+        merged_df = merging_order_df_with_short_sub_df(order_df, short_sub_df)
+        merged_df = creating_year_col(merged_df)
+
+        after_sub_7_df = after_sub_7(merged_df)
+        nb_cmd_alltime_df = find_nb_cmd(merged_df)
+        y0_df, y1_df, y2_df, y3_df = split_by_year(nb_cmd_alltime_df)
+
+
+        fig_plot_first_order = plot_first_order(after_sub_7_df)
+        fig_plot_how_many_days_after_sub = plot_how_many_days_after_sub(merged_df)
+        fig_plot_gift_and_not = plot_gift_and_not(after_sub_7_df, sub_df)
+        fig_plot_price_distribution = plot_price_distribution(merged_df)
+        fig_plot_simple_and_complex_order = plot_simple_and_complex_order(merged_df)
+        fig_plot_nb_cmd_by_customer_10_less = plot_nb_cmd_by_customer_10_less(nb_cmd_alltime_df)
+        fig_plot_nb_cmd_by_customer_10_more = plot_nb_cmd_by_customer_10_more(nb_cmd_alltime_df)
+        fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Full Member')
+        fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Not Full Member')
+        fig_plot_renew_churn_metrics = plot_renew_churn_metrics(merged_df)
+
+
+##########################################################
+
 
         def generate_pdf_report(sub_df, today_date, dict_full_member, renewal_dict, new_trial_last_week,
                             new_trial_prev_week, last_week_new_full_member, prev_week_new_full_member,
@@ -375,6 +419,24 @@ if uploaded_file:
         st.pyplot(fig_cohort_comparison)
 
         st.markdown("---")
+
+        st.header("ORDERS ANALYSIS")
+        st.pyplot(fig_plot_first_order)
+        st.pyplot(fig_plot_how_many_days_after_sub)
+
+        # fig_plot_first_order = plot_first_order(after_sub_7_df)
+        # fig_plot_how_many_days_after_sub = plot_how_many_days_after_sub(merged_df)
+        # fig_plot_gift_and_not = plot_gift_and_not(after_sub_7_df, sub_df)
+        # fig_plot_price_distribution = plot_price_distribution(merged_df)
+        # fig_plot_simple_and_complex_order = plot_simple_and_complex_order(merged_df)
+        # fig_plot_nb_cmd_by_customer_10_less = plot_nb_cmd_by_customer_10_less(nb_cmd_alltime_df)
+        # fig_plot_nb_cmd_by_customer_10_more = plot_nb_cmd_by_customer_10_more(nb_cmd_alltime_df)
+        # fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Full Member')
+        # fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status='Not Full Member')
+        # fig_plot_renew_churn_metrics = plot_renew_churn_metrics(merged_df)
+
+
+
 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
