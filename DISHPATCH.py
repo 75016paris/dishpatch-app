@@ -3609,8 +3609,8 @@ def renew_churn_status(df, renewal_dict):
     churn_y2_df = customer_in_y2_df[~customer_in_y2_df['customer_name'].isin(renewed_to_y2_df['customer_name'])]
 
 
-    sub_df['renewed_to_y2'] = sub_df['customer_name'].isin(renewed_to_y2_df['customer_name'])
-    sub_df['churn_to_y2'] = sub_df['customer_name'].isin(churn_y2_df['customer_name'])
+    df['renewed_to_y2'] = df['customer_name'].isin(renewed_to_y2_df['customer_name'])
+    df['churn_to_y2'] = df['customer_name'].isin(churn_y2_df['customer_name'])
 
 
 
