@@ -3957,7 +3957,8 @@ def plot_gift_and_not(df, sub_df):
 
     # Adjust layout to prevent overlap
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+    return fig
 
 
 # %%
@@ -4058,8 +4059,8 @@ def plot_price_distribution(df):
     ax.legend()
 
 
-    plt.show()
-
+    #plt.show()
+    return fig
 
 # %%
 def plot_simple_and_complex_order(df):
@@ -4096,7 +4097,8 @@ def plot_simple_and_complex_order(df):
     ax.legend(wedges, labels, title="Order Type", loc="center left", bbox_to_anchor=(1, 0.5))
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+    return fig
 
 
 # %%

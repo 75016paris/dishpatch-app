@@ -423,6 +423,10 @@ if uploaded_file3:
         st.header("ORDERS ANALYSIS")
         st.pyplot(fig_plot_first_order)
         st.pyplot(fig_plot_how_many_days_after_sub)
+        st.pyplot(fig_plot_gift_and_not)
+        st.pyplot(fig_plot_price_distribution)
+        st.pyplot(fig_plot_simple_and_complex_order)
+
 
         # fig_plot_first_order = plot_first_order(after_sub_7_df)
         # fig_plot_how_many_days_after_sub = plot_how_many_days_after_sub(merged_df)
