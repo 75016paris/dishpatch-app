@@ -3768,7 +3768,7 @@ def plot_first_order(df):
     plt.ylabel('Percentage (%)')
     plt.title('FIRST ORDER AFTER SUBSCRIPTION (+7 days) by Vendors')
     plt.legend()
-    plt.show()
+    #plt.show()
 
 # %%
 def plot_how_many_days_after_sub(df):
