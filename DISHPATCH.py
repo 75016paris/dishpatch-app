@@ -3746,29 +3746,32 @@ def plot_first_order(df):
 
 
 
-    first_order_plot = plt.figure(figsize=(22, 13))
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(22, 13))
     # Plot bars for Full Members
-    full_bars = plt.bar([i - width/2 for i in x], full_vals, width=width, label='Full Member', color='blue', alpha=0.7)
+    full_bars = ax.bar([i - width/2 for i in x], full_vals, width=width, label='Full Member', color='blue', alpha=0.7)
     # Plot bars for Not Full Members
-    notfull_bars = plt.bar([i + width/2 for i in x], notfull_vals, width=width, label='Not Full Member', color='red', alpha=0.7)
+    notfull_bars = ax.bar([i + width/2 for i in x], notfull_vals, width=width, label='Not Full Member', color='red', alpha=0.7)
 
     # Add percentage labels above the bars
     for i, bar in enumerate(full_bars):
         height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{full_vals[i]:.1f}%',
-                ha='center', va='bottom', fontsize=10, rotation=50, color='blue', alpha=0.7 )
+        ax.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{full_vals[i]:.1f}%',
+                ha='center', va='bottom', fontsize=10, rotation=50, color='blue', alpha=0.7)
 
     for i, bar in enumerate(notfull_bars):
         height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2 + 0.1, height + 0.1, f'{notfull_vals[i]:.1f}%',
+        ax.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{notfull_vals[i]:.1f}%',
                 ha='center', va='bottom', fontsize=10, rotation=50, color='red', alpha=0.7)
 
-    plt.xticks(x, all_vendors, rotation=90)
-    plt.xlabel('Vendor')
-    plt.ylabel('Percentage (%)')
-    plt.title('FIRST ORDER AFTER SUBSCRIPTION (+7 days) by Vendors')
-    plt.legend()
-    #plt.show()
+    ax.set_xticks(x)
+    ax.set_xticklabels(all_vendors, rotation=90)
+    ax.set_xlabel('Vendor')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_title('FIRST ORDER AFTER SUBSCRIPTION (+7 days) by Vendors')
+    ax.legend()
+
+    return fig
 
 # %%
 def plot_how_many_days_after_sub(df):
