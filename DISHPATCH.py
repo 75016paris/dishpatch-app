@@ -4526,7 +4526,8 @@ def find_nb_cmd(df):
     'before_sub': 'first',
     'in_y1': 'first',
     'in_y2': 'first',
-    'in_y3': 'first'
+    'in_y3': 'first',
+    'from_created_to_today': 'first'
     })
 
     nb_cmd_alltime_df['cmd'] = nb_cmd_alltime_df.index
@@ -4539,7 +4540,8 @@ def find_nb_cmd(df):
         'before_sub': 'first',
         'in_y1': 'first',
         'in_y2': 'first',
-        'in_y3': 'first'
+        'in_y3': 'first',
+        'from_created_to_today': 'first'
     })
 
     nb_cmd_alltime_df = nb_cmd_alltime_df.rename(columns={'items_price': 'cmd_price_mean', 'cmd': 'total_cmd'})
