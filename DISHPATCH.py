@@ -4119,13 +4119,13 @@ def discount_vendor(merged_df):
 
 # %%
 def plot_how_many_days_after_sub(df):
-    df['days_since_subscription'] = (df['date'] - df['created_utc']).dt.days
-    # df['days_since_subscription'] = df.apply(
-    #     lambda row: (row['date'] - row['created_utc']).days
-    #     if pd.notnull(row['date']) and pd.notnull(row['created_utc'])
-    #     else None,
-    #     axis=1
-    # )
+    # df['days_since_subscription'] = (df['date'] - df['created_utc']).dt.days
+    df['days_since_subscription'] = df.apply(
+        lambda row: (row['date'] - row['created_utc']).days
+        if pd.notnull(row['date']) and pd.notnull(row['created_utc'])
+        else None,
+        axis=1
+    )
 
     # Filter for orders within 0 to 7 days after subscription
     days_since_subscription_df = df[(df['days_since_subscription'] <= 7) & (df['days_since_subscription'] >= 0)]
