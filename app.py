@@ -9,7 +9,7 @@ from DISHPATCH import plot_weekly_trials_8_weeks, plot_weekly_trials_all_time, w
 ##########################################################
 from DISHPATCH import preprocess_order, order_grouping, clean_and_enrich_order_data, item_name_cleaning, pricing_items, flag_gift_and_note
 from DISHPATCH import renew_churn_status, creating_short_sub_df, merging_order_df_with_short_sub_df, creating_year_col, after_sub_7, find_nb_cmd, split_by_year
-from DISHPATCH import discount_vendor, plot_first_order_1, plot_first_order_2, plot_first_order_3, plot_first_order_4, plot_how_many_days_after_sub, plot_gift_and_not, plot_price_distribution, plot_simple_and_complex_order, plot_nb_cmd_by_customer_10_less, plot_nb_cmd_by_customer_10_more, plot_nb_cmd_by_customer_y1_y2, plot_renew_churn_metrics
+from DISHPATCH import subscription_lenght, discount_vendor, plot_first_order_1, plot_first_order_2, plot_first_order_3, plot_first_order_4, plot_how_many_days_after_sub, plot_gift_and_not, plot_price_distribution, plot_simple_and_complex_order, plot_nb_cmd_by_customer_10_less, plot_nb_cmd_by_customer_10_more, plot_nb_cmd_by_customer_y1_y2, plot_renew_churn_metrics
 
 import matplotlib
 matplotlib.use('Agg')
