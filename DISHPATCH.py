@@ -3909,14 +3909,14 @@ def plot_first_order_2(after_sub_7_df):
 
     return fig
 
-def plot_first_order_3(merged_df):
+def plot_first_order_3(after_sub_7_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
-    # Select only orders placed after the subscription date, and within 7 days after subscription
-    after_sub_7_df = merged_df[
-        (merged_df['date'] >= merged_df['created_utc']) &
-        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
-    ]
+    # # Select only orders placed after the subscription date, and within 7 days after subscription
+    # after_sub_7_df = merged_df[
+    #     (merged_df['date'] >= merged_df['created_utc']) &
+    #     (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    # ]
 
     after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
 
@@ -3993,14 +3993,14 @@ def plot_first_order_3(merged_df):
 
     return fig
 
-def plot_first_order_4(merged_df):
+def plot_first_order_4(after_sub_7_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
-    # Select only orders placed after the subscription date, and within 7 days after subscription
-    after_sub_7_df = merged_df[
-        (merged_df['date'] >= merged_df['created_utc']) &
-        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
-    ]
+    # # Select only orders placed after the subscription date, and within 7 days after subscription
+    # after_sub_7_df = merged_df[
+    #     (merged_df['date'] >= merged_df['created_utc']) &
+    #     (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    # ]
 
     after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
 
