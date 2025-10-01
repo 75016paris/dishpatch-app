@@ -3777,7 +3777,7 @@ def plot_first_order(df):
 
     return fig
 
-def plot_first_order_1(after_sub_7_df):
+def plot_first_order_1(merged_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
     # Select only orders placed after the subscription date, and within 7 days after subscription
@@ -3842,7 +3842,7 @@ def plot_first_order_1(after_sub_7_df):
 
     return fig
 
-def plot_first_order_2(after_sub_7_df):
+def plot_first_order_2(merged_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
     # Select only orders placed after the subscription date, and within 7 days after subscription
@@ -3909,7 +3909,7 @@ def plot_first_order_2(after_sub_7_df):
 
     return fig
 
-def plot_first_order_3(after_sub_7_df):
+def plot_first_order_3(merged_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
     # Select only orders placed after the subscription date, and within 7 days after subscription
@@ -3993,7 +3993,7 @@ def plot_first_order_3(after_sub_7_df):
 
     return fig
 
-def plot_first_order_4(after_sub_7_df):
+def plot_first_order_4(merged_df):
     # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
 
     # Select only orders placed after the subscription date, and within 7 days after subscription
