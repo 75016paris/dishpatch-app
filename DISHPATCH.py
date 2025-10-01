@@ -3656,7 +3656,13 @@ def merging_order_df_with_short_sub_df(order_df, short_sub_df):
     return df
 
 def subscription_lenght(df):
-    df['from_created_to_today'] = (today_date.date() - pd.to_datetime(df['created_utc']).dt.date).dt.days
+    df['created_utc'] = pd.to_datetime(df['created_utc'])
+    today_dt = pd.to_datetime(today_date)
+    if df['created_utc'].dt.tz is None:
+        today_dt = today_dt.tz_localize(None)
+    else:
+        today_dt = today_dt.tz_convert(df['created_utc'].dt.tz)
+    df['from_created_to_today'] = (today_dt - df['created_utc']).dt.days
 
     return df
 
