@@ -154,6 +154,7 @@ if uploaded_file3:
         short_sub_df = creating_short_sub_df(sub_df)
 
         merged_df = merging_order_df_with_short_sub_df(order_df, short_sub_df)
+        merged_df = subscription_lenght(merged_df)
         merged_df = creating_year_col(merged_df)
 
         after_sub_7_df = after_sub_7(merged_df)
