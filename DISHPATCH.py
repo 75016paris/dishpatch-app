@@ -3656,7 +3656,7 @@ def merging_order_df_with_short_sub_df(order_df, short_sub_df):
     return df
 
 def subscription_lenght(df):
-    df['days_since_subscription'] = (df['date'] - df['created_utc']).dt.days
+    df['from_created_to_today'] = (today_date.date() - pd.to_datetime(df['created_utc']).dt.date).dt.days
 
     return df
 
