@@ -173,8 +173,8 @@ if uploaded_file3:
         fig_plot_simple_and_complex_order = plot_simple_and_complex_order(merged_df)
         fig_plot_nb_cmd_by_customer_10_less = plot_nb_cmd_by_customer_10_less(nb_cmd_alltime_df)
         fig_plot_nb_cmd_by_customer_10_more = plot_nb_cmd_by_customer_10_more(nb_cmd_alltime_df)
-        fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(merged_df, status='Full Member')
-        fig_plot_nb_cmd_by_customer_y1_y2_not_full = plot_nb_cmd_by_customer_y1_y2(merged_df, status='Not Full Member')
+        fig_plot_nb_cmd_by_customer_y1_y2 = plot_nb_cmd_by_customer_y1_y2(merged_df, 'Full Member')
+        fig_plot_nb_cmd_by_customer_y1_y2_not_full = plot_nb_cmd_by_customer_y1_y2(merged_df, 'Not Full Member')
         fig_plot_renew_churn_metrics = plot_renew_churn_metrics(merged_df)
 
 
