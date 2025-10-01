@@ -4643,7 +4643,7 @@ def plot_nb_cmd_by_customer_10_more(df):
     return fig
 
 # %%
-def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
+def plot_nb_cmd_by_customer_y1_y2(merged_df, status):
     status_title = status
 
     if status == 'Full Member':
@@ -4653,21 +4653,31 @@ def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
         status = False
         status_color = 'red'
 
+    merged_df = merged_df[merged_df['is_full_member'] == status]
 
+    y1_df = merged_df[merged_df['in_y1'] == True]
     y1_df = y1_df[y1_df['from_created_to_today'] > 364]
+    y1_df = y1_df.groupby('cmd').agg({'customer_name':'first', 'cmd':'first'})
+    y1_df = y1_df.groupby('customer_name').agg({'cmd':'count'})
+    y1_df['customer_name'] = y1_df.index
+    y1_df_cus = len(y1_df)
+    y1_df_nb_cmd = y1_df['cmd'].sum()
+
+    y2_df = merged_df[merged_df['in_y2'] == True]
     y2_df = y2_df[y2_df['from_created_to_today'] > 729]
-
-
-    y1_df = y1_df[y1_df['is_full_member'] == status]
-    y2_df = y2_df[y2_df['is_full_member'] == status]
+    y2_df = y2_df.groupby('cmd').agg({'customer_name':'first', 'cmd':'first'})
+    y2_df = y2_df.groupby('customer_name').agg({'cmd':'count'})
+    y2_df['customer_name'] = y2_df.index
+    y2_df_cus = len(y2_df)
+    y2_df_nb_cmd = y2_df['cmd'].sum()
 
 
     def group_cmd(cmd):
         return cmd if cmd <= 10 else '>10'
 
     # Apply grouping to both Year 1 and Year 2 datasets
-    y1_df['cmd_grouped'] = y1_df['total_cmd'].apply(group_cmd)
-    y2_df['cmd_grouped'] = y2_df['total_cmd'].apply(group_cmd)
+    y1_df['cmd_grouped'] = y1_df['cmd'].apply(group_cmd)
+    y2_df['cmd_grouped'] = y2_df['cmd'].apply(group_cmd)
 
     # Get value counts for each group
     y1_counts = y1_df['cmd_grouped'].value_counts().sort_index(key=lambda x: x.map(lambda v: int(v) if v != '>10' else 11))
@@ -4684,8 +4694,8 @@ def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
     # Plot for Year 1
     sns.barplot(x=all_indexes, y=y1_counts.values, color=status_color, alpha=0.7, ax=ax1)
     ax1.set_title(f'N. orders for {status_title} (Year 1)')
-    ax1.set_xlabel('Number of Orders')
-    ax1.set_ylabel('Number of Customers')
+    ax1.set_xlabel(f'Number of Orders - {y1_df_nb_cmd}')
+    ax1.set_ylabel(f'Number of Customers - {y1_df_cus}')
     ax1.tick_params(axis='x', rotation=45)
 
     # Add raw counts and percentages for Year 1
@@ -4703,8 +4713,8 @@ def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
     # Plot for Year 2
     sns.barplot(x=all_indexes, y=y2_counts.values, color=status_color, alpha=0.7, ax=ax2)
     ax2.set_title(f'N. orders for {status_title} (Year 2)')
-    ax2.set_xlabel('Number of Orders')
-    ax2.set_ylabel('Number of Customers')
+    ax2.set_xlabel(f'Number of Orders - {y2_df_nb_cmd}')
+    ax2.set_ylabel(f'Number of Customers - {y2_df_cus}')
     ax2.tick_params(axis='x', rotation=45)
 
     # Add raw counts and percentages for Year 2
