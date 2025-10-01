@@ -9,7 +9,7 @@ from DISHPATCH import plot_weekly_trials_8_weeks, plot_weekly_trials_all_time, w
 ##########################################################
 from DISHPATCH import preprocess_order, order_grouping, clean_and_enrich_order_data, item_name_cleaning, pricing_items, flag_gift_and_note
 from DISHPATCH import renew_churn_status, creating_short_sub_df, merging_order_df_with_short_sub_df, creating_year_col, after_sub_7, find_nb_cmd, split_by_year
-from DISHPATCH import plot_first_order, plot_how_many_days_after_sub, plot_gift_and_not, plot_price_distribution, plot_simple_and_complex_order, plot_nb_cmd_by_customer_10_less, plot_nb_cmd_by_customer_10_more, plot_nb_cmd_by_customer_y1_y2, plot_renew_churn_metrics
+from DISHPATCH import discount_vendor, plot_first_order_1, plot_first_order_2, plot_first_order_3, plot_first_order_4, plot_how_many_days_after_sub, plot_gift_and_not, plot_price_distribution, plot_simple_and_complex_order, plot_nb_cmd_by_customer_10_less, plot_nb_cmd_by_customer_10_more, plot_nb_cmd_by_customer_y1_y2, plot_renew_churn_metrics
 
 import matplotlib
 matplotlib.use('Agg')
@@ -161,7 +161,12 @@ if uploaded_file3:
         y0_df, y1_df, y2_df, y3_df = split_by_year(nb_cmd_alltime_df)
 
 
-        fig_plot_first_order = plot_first_order(after_sub_7_df)
+        # fig_plot_first_order = plot_first_order(after_sub_7_df)
+        fig_plot_first_order_1 = plot_first_order_1(after_sub_7_df)
+        fig_plot_first_order_2 = plot_first_order_2(after_sub_7_df)
+        fig_plot_first_order_3 = plot_first_order_3(after_sub_7_df)
+        fig_plot_first_order_4 = plot_first_order_4(after_sub_7_df)
+        fig_discount_vendor = discount_vendor(merged_df)
         fig_plot_how_many_days_after_sub = plot_how_many_days_after_sub(merged_df)
         fig_plot_gift_and_not = plot_gift_and_not(after_sub_7_df, sub_df)
         fig_plot_price_distribution = plot_price_distribution(merged_df)
@@ -421,8 +426,12 @@ if uploaded_file3:
         st.markdown("---")
 
         st.header("ORDERS ANALYSIS")
-        st.pyplot(fig_plot_first_order)
         st.pyplot(fig_plot_how_many_days_after_sub)
+        st.pyplot(fig_plot_first_order_1)
+        st.pyplot(fig_plot_first_order_2)
+        st.pyplot(fig_plot_first_order_3)
+        st.pyplot(fig_plot_first_order_4)
+        st.pyplot(fig_discount_vendor)
         st.pyplot(fig_plot_gift_and_not)
         st.pyplot(fig_plot_price_distribution)
         st.pyplot(fig_plot_simple_and_complex_order)

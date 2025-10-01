@@ -580,7 +580,7 @@ def full_member_status(df):
     not_gifted = (~df['is_gifted_member'])
 
     refund_period_passed = (
-            (today_date > df['refund_period_end_utc'])
+            (today_date >= df['refund_period_end_utc'])
             )
 
     df['is_full_member'] = (
@@ -3043,7 +3043,7 @@ def plot_cohort_conversion_funnel(sub_df, today_date, today_iso):
     ])
 
     # === CREATE CHART (same style as other functions) ===
-    fig, ax = plt.subplots(1, 1, figsize=(12, 9))
+    fig, ax = plt.subplots(1, 1, figsize=(11, 8))
 
     categories = ['Initial Trials', 'Survived Trial Period', 'Full Members']
     values = [total_trials, survivors_trial, survivors_refund]
@@ -3655,6 +3655,10 @@ def merging_order_df_with_short_sub_df(order_df, short_sub_df):
 
     return df
 
+def subscription_lenght(df):
+    df['from_created_to_today'] = (today_date.date() - pd.to_datetime(merged_df['created_utc']).dt.date).dt.days
+
+    return df
 
 # %%
 def creating_year_col(df):
@@ -3771,6 +3775,346 @@ def plot_first_order(df):
     ax.set_title('FIRST ORDER AFTER SUBSCRIPTION (+7 days) by Vendors')
     ax.legend()
 
+    return fig
+
+def plot_first_order_1(after_sub_7_df):
+    # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
+
+    # Select only orders placed after the subscription date, and within 7 days after subscription
+    after_sub_7_df = merged_df[
+        (merged_df['date'] >= merged_df['created_utc']) &
+        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    ]
+
+
+    after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
+
+    # Get the first order after subscription (+7 days) for each customer
+    after_sub_plus7_df = after_sub_7_df.sort_values('date')
+
+    # Separate full & not full members
+    after_sub_plus7_df_full = after_sub_7_df[after_sub_7_df['is_full_member'] == True]
+    after_sub_plus7_df_notfull = after_sub_7_df[after_sub_7_df['is_full_member'] == False]
+
+    # Get absolute vendor counts
+    full_counts = after_sub_plus7_df_full['vendor'].value_counts()
+    notfull_counts = after_sub_plus7_df_notfull['vendor'].value_counts()
+
+    # Sort vendors by count (descending) for full members
+    vendors_sorted = full_counts.sort_values(ascending=False).index.tolist()
+
+    # Ensure all vendors are present (even if absent in one group)
+    all_vendors = list(vendors_sorted)
+    for v in notfull_counts.index:
+        if v not in all_vendors:
+            all_vendors.append(v)
+
+    # Get values in sorted order
+    full_vals = [full_counts.get(v, 0) for v in all_vendors]
+    notfull_vals = [notfull_counts.get(v, 0) for v in all_vendors]
+
+    x = range(len(all_vendors))
+    width = 0.4
+
+    fig = plt.figure(figsize=(22, 13))
+    # Plot bars for Full Members
+    full_bars = plt.bar([i - width/2 for i in x], full_vals, width=width, label='Full Member', color='blue', alpha=0.7)
+    # Plot bars for Not Full Members
+    notfull_bars = plt.bar([i + width/2 for i in x], notfull_vals, width=width, label='Not Full Member', color='red', alpha=0.7)
+
+    # Add absolute value labels above the bars
+    for i, bar in enumerate(full_bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{int(full_vals[i])}',
+                ha='center', va='bottom', fontsize=10, rotation=50, color='blue', alpha=0.7 )
+
+    for i, bar in enumerate(notfull_bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2 + 0.1, height + 0.1, f'{int(notfull_vals[i])}',
+                ha='center', va='bottom', fontsize=10, rotation=50, color='red', alpha=0.7)
+
+    plt.xticks(x, all_vendors, rotation=90)
+    plt.xlabel('Vendor')
+    plt.ylabel('Count')
+    plt.title('WHERE CUSTOMERS ORDER THEIR FIRST ITEMS AFTER THEIR SUBSCRIPTION (+7 Days) \n distribution by Vendors (Full Member vs Trial)')
+    plt.legend()
+    plt.tight_layout()
+
+    return fig
+
+def plot_first_order_2(after_sub_7_df):
+    # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
+
+    # Select only orders placed after the subscription date, and within 7 days after subscription
+    after_sub_7_df = merged_df[
+        (merged_df['date'] >= merged_df['created_utc']) &
+        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    ]
+
+    after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
+
+    # Get the first order after subscription (+7 days) for each customer
+    after_sub_plus7_df = after_sub_7_df.sort_values('date')
+
+    # Separate full & not full members
+    after_sub_plus7_df_full = after_sub_7_df[after_sub_7_df['is_full_member'] == True]
+    after_sub_plus7_df_notfull = after_sub_7_df[after_sub_7_df['is_full_member'] == False]
+
+    # Get absolute vendor counts
+    full_counts = after_sub_plus7_df_full['vendor'].value_counts()
+    notfull_counts = after_sub_plus7_df_notfull['vendor'].value_counts()
+
+    # Combine counts to get totals per vendor
+    all_vendors = set(full_counts.index).union(set(notfull_counts.index))
+    totals = {v: full_counts.get(v, 0) + notfull_counts.get(v, 0) for v in all_vendors}
+
+    # Sort vendors by total count descending
+    vendors_sorted = sorted(totals, key=totals.get, reverse=True)
+
+    # Get values
+    full_vals = [full_counts.get(v, 0) for v in vendors_sorted]
+    notfull_vals = [notfull_counts.get(v, 0) for v in vendors_sorted]
+    total_vals = [totals.get(v, 0) for v in vendors_sorted]
+
+    # Calculate percentages per vendor
+    full_percents = [ (full_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+    notfull_percents = [ (notfull_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+
+    x = range(len(vendors_sorted))
+    width = 0.8  # Wider bars for stacked
+
+    fig = plt.figure(figsize=(22, 13))
+
+    # Plot stacked bars: Full Members at bottom, Not Full on top
+    full_bars = plt.bar(x, full_vals, width=width, label='Full Member', color='blue', alpha=0.7)
+    notfull_bars = plt.bar(x, notfull_vals, width=width, bottom=full_vals, label='Not Full Member', color='red', alpha=0.7)
+
+    # Add labels with count and percentage inside the bars
+    for i, height in enumerate(full_vals):
+        if height > 0:
+            label = f"{int(height)}\n{full_percents[i]:.1f}%"
+            plt.text(x[i], full_vals[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+    for i, height in enumerate(notfull_vals):
+        if height > 0:
+            label = f"{int(height)}\n{notfull_percents[i]:.1f}%"
+            plt.text(x[i], full_vals[i] + notfull_vals[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+    plt.xticks(x, vendors_sorted, rotation=90)
+    plt.xlabel('Vendor')
+    plt.ylabel('Count')
+    plt.title('WHERE CUSTOMERS ORDER THEIR FIRST ITEMS AFTER THEIR SUBSCRIPTION (+7 Days) \n Stacked Distribution by Vendors (Full Member vs Trial) with Percentage Split')
+    plt.legend()
+    plt.tight_layout()
+
+    return fig
+
+def plot_first_order_3(after_sub_7_df):
+    # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
+
+    # Select only orders placed after the subscription date, and within 7 days after subscription
+    after_sub_7_df = merged_df[
+        (merged_df['date'] >= merged_df['created_utc']) &
+        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    ]
+
+    after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
+
+    # Get the first order after subscription (+7 days) for each customer
+    after_sub_plus7_df = after_sub_7_df.sort_values('date')
+
+    # Separate full & not full members
+    after_sub_plus7_df_full = after_sub_7_df[after_sub_7_df['is_full_member'] == True]
+    after_sub_plus7_df_notfull = after_sub_7_df[after_sub_7_df['is_full_member'] == False]
+
+    # Get absolute vendor counts
+    full_counts = after_sub_plus7_df_full['vendor'].value_counts()
+    notfull_counts = after_sub_plus7_df_notfull['vendor'].value_counts()
+
+    # Combine counts to get totals per vendor
+    all_vendors = set(full_counts.index).union(set(notfull_counts.index))
+    totals = {v: full_counts.get(v, 0) + notfull_counts.get(v, 0) for v in all_vendors}
+
+    # Sort vendors by total count descending and keep only top 10
+    vendors_sorted = sorted(totals, key=totals.get, reverse=True)[:10]
+
+    # Get values for top 10
+    full_vals = [full_counts.get(v, 0) for v in vendors_sorted]
+    notfull_vals = [notfull_counts.get(v, 0) for v in vendors_sorted]
+    total_vals = [totals.get(v, 0) for v in vendors_sorted]
+
+    # Calculate percentages per vendor
+    full_percents = [ (full_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+    notfull_percents = [ (notfull_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+
+    # Calculate widths proportional to total_vals
+    total_sum = sum(total_vals)
+    if total_sum == 0:
+        total_sum = 1  # Avoid division by zero
+    widths = [val / total_sum * 100 for val in total_vals]  # Scale to 100 for easier positioning
+
+    # Calculate cumulative positions for bar starts
+    positions = [0]
+    for w in widths[:-1]:
+        positions.append(positions[-1] + w)
+
+    fig = plt.figure(figsize=(22, 13))
+
+    # Plot stacked bars with variable widths
+    for i in range(len(vendors_sorted)):
+        # Full Member segment
+        full_bar = plt.bar(positions[i], full_percents[i], width=widths[i], bottom=0, color='blue', alpha=0.7, label='Full Member' if i == 0 else None, align='edge', edgecolor='white', linewidth=1)
+
+        # Not Full Member segment
+        notfull_bar = plt.bar(positions[i], notfull_percents[i], width=widths[i], bottom=full_percents[i], color='red', alpha=0.7, label='Not Full Member' if i == 0 else None, align='edge', edgecolor='white', linewidth=1)
+
+        # Add labels with count and percentage inside the segments
+        if full_vals[i] > 0:
+            label = f"{int(full_vals[i])}\n{full_percents[i]:.1f}%"
+            plt.text(positions[i] + widths[i]/2, full_percents[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+        if notfull_vals[i] > 0:
+            label = f"{int(notfull_vals[i])}\n{notfull_percents[i]:.1f}%"
+            plt.text(positions[i] + widths[i]/2, full_percents[i] + notfull_percents[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+        # Add total count above the bar
+        plt.text(positions[i] + widths[i]/2, 100 + 1, f"Total: {int(total_vals[i])}", ha='center', va='bottom', fontsize=9)
+
+    # Set x-ticks at the center of each bar
+    tick_positions = [positions[i] + widths[i]/2 for i in range(len(vendors_sorted))]
+    plt.xticks(tick_positions, vendors_sorted, rotation=45, ha='right')
+
+    plt.xlabel('Vendor')
+    plt.ylabel('Percentage')
+    plt.ylim(0, 110)  # Extra space for total labels
+    plt.title('WHERE CUSTOMERS ORDER THEIR FIRST ITEMS AFTER THEIR SUBSCRIPTION (+7 Days) \n Mekko Chart: Distribution by TOP 10 Vendors')
+    plt.legend()
+    plt.tight_layout()
+
+    return fig
+
+def plot_first_order_4(after_sub_7_df):
+    # WHAT IS THE FIRST ORDER FOR EACH CUSTOMER AFTER THEY SUBSCRIBE (+7 DAYS).
+
+    # Select only orders placed after the subscription date, and within 7 days after subscription
+    after_sub_7_df = merged_df[
+        (merged_df['date'] >= merged_df['created_utc']) &
+        (merged_df['date'] <= (merged_df['created_utc'] + pd.Timedelta(days=7)))
+    ]
+
+    after_sub_7_df = after_sub_7_df.groupby('customer_name').agg({'vendor': 'first', 'is_full_member': 'first', 'date':'first', 'is_gift':'first', 'have_note':'first'})
+
+    # Get the first order after subscription (+7 days) for each customer
+    after_sub_plus7_df = after_sub_7_df.sort_values('date')
+
+    # Separate full & not full members
+    after_sub_plus7_df_full = after_sub_7_df[after_sub_7_df['is_full_member'] == True]
+    after_sub_plus7_df_notfull = after_sub_7_df[after_sub_7_df['is_full_member'] == False]
+
+    # Get absolute vendor counts
+    full_counts = after_sub_plus7_df_full['vendor'].value_counts()
+    notfull_counts = after_sub_plus7_df_notfull['vendor'].value_counts()
+
+    # Combine counts to get totals per vendor
+    all_vendors = set(full_counts.index).union(set(notfull_counts.index))
+    totals = {v: full_counts.get(v, 0) + notfull_counts.get(v, 0) for v in all_vendors}
+
+    # Sort vendors by total count descending and keep only top 10
+    vendors_sorted = sorted(totals, key=totals.get, reverse=True)[10:]
+
+    # Get values for top 10
+    full_vals = [full_counts.get(v, 0) for v in vendors_sorted]
+    notfull_vals = [notfull_counts.get(v, 0) for v in vendors_sorted]
+    total_vals = [totals.get(v, 0) for v in vendors_sorted]
+
+    # Calculate percentages per vendor
+    full_percents = [ (full_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+    notfull_percents = [ (notfull_vals[i] / total_vals[i] * 100) if total_vals[i] > 0 else 0 for i in range(len(vendors_sorted)) ]
+
+    # Calculate widths proportional to total_vals
+    total_sum = sum(total_vals)
+    if total_sum == 0:
+        total_sum = 1  # Avoid division by zero
+    widths = [val / total_sum * 100 for val in total_vals]  # Scale to 100 for easier positioning
+
+    # Calculate cumulative positions for bar starts
+    positions = [0]
+    for w in widths[:-1]:
+        positions.append(positions[-1] + w)
+
+    fig = plt.figure(figsize=(22, 13))
+
+    # Plot stacked bars with variable widths
+    for i in range(len(vendors_sorted)):
+        # Full Member segment
+        full_bar = plt.bar(positions[i], full_percents[i], width=widths[i], bottom=0, color='blue', alpha=0.7, label='Full Member' if i == 0 else None, align='edge', edgecolor='white', linewidth=1)
+
+        # Not Full Member segment
+        notfull_bar = plt.bar(positions[i], notfull_percents[i], width=widths[i], bottom=full_percents[i], color='red', alpha=0.7, label='Not Full Member' if i == 0 else None, align='edge', edgecolor='white', linewidth=1)
+
+        # Add labels with count and percentage inside the segments
+        if full_vals[i] > 0:
+            label = f"{int(full_vals[i])}\n{full_percents[i]:.1f}%"
+            plt.text(positions[i] + widths[i]/2, full_percents[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+        if notfull_vals[i] > 0:
+            label = f"{int(notfull_vals[i])}\n{notfull_percents[i]:.1f}%"
+            plt.text(positions[i] + widths[i]/2, full_percents[i] + notfull_percents[i]/2, label, ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+
+        # Add total count above the bar
+        plt.text(positions[i] + widths[i]/2, 100 + 1, f"Total: {int(total_vals[i])}", ha='center', va='bottom', fontsize=9)
+
+    # Set x-ticks at the center of each bar
+    tick_positions = [positions[i] + widths[i]/2 for i in range(len(vendors_sorted))]
+    plt.xticks(tick_positions, vendors_sorted, rotation=45, ha='right')
+
+    plt.xlabel('Vendor')
+    plt.ylabel('Percentage')
+    plt.ylim(0, 110)  # Extra space for total labels
+    plt.title('WHERE CUSTOMERS ORDER THEIR FIRST ITEMS AFTER THEIR SUBSCRIPTION (+7 Days) \n Mekko Chart: Distribution by Vendors')
+    plt.legend()
+    plt.tight_layout()
+
+    return fig
+
+def discount_vendor(merged_df):
+    NB_OF_DISCOUNT_VOUCHER = 4
+
+    # Filter for trial members
+    notfull_discount_df = merged_df[merged_df['is_full_member'] == False]
+
+    # Sort by customer and date to ensure chronological order
+    notfull_discount_df = notfull_discount_df.sort_values(by=['customer_name', 'date'])
+
+    # Take the first N orders per customer
+    notfull_discount_df = notfull_discount_df.groupby('customer_name').head(NB_OF_DISCOUNT_VOUCHER)
+
+    # Count vendor appearances across all first N orders
+    vendor_counts = notfull_discount_df['vendor'].value_counts()
+    vendor_proportions = notfull_discount_df['vendor'].value_counts(normalize=True) * 100
+
+    # Plot bar chart and annotate bars with counts
+    fig, ax = plt.subplots(figsize=(12, 8))
+    vendor_counts.plot.bar(color='red', alpha=0.7, ax=ax)
+    plt.xlabel('Vendor')
+    plt.ylabel('Count')
+    plt.title(f'Vendor Counts in First {NB_OF_DISCOUNT_VOUCHER} Orders (Trial Members)')
+
+    for i, bar in enumerate(ax.patches):
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + 0.1,
+            f'{int(height)}',
+            ha='center',
+            va='bottom',
+            fontsize=10,
+            color='red',
+            alpha=0.7,
+            rotation=30
+        )
+
+    plt.tight_layout()
     return fig
 
 # %%
@@ -4063,42 +4407,113 @@ def plot_price_distribution(df):
     return fig
 
 # %%
-def plot_simple_and_complex_order(df):
+# def plot_simple_and_complex_order(df):
 
 
-    # Get value counts and ensure both categories are present
-    value_counts = df['is_complex'].value_counts().sort_index()
-    # Ensure both 0 and 1 are present
-    value_counts = value_counts.reindex([0, 1], fill_value=0)
-    labels = ['Simple', 'Complex']
-    colors = ['green', 'orange']
+#     # Get value counts and ensure both categories are present
+#     value_counts = df['is_complex'].value_counts().sort_index()
+#     # Ensure both 0 and 1 are present
+#     value_counts = value_counts.reindex([0, 1], fill_value=0)
+#     labels = ['Simple', 'Complex']
+#     colors = ['green', 'orange']
 
-    fig, ax = plt.subplots()
-    wedges, texts, autotexts = ax.pie(
-        value_counts,
-        autopct='%1.1f%%',
-        labels=labels,
-        colors=colors,
-        textprops={'color': 'white', 'fontsize': 12, 'weight': 'bold'},
-        startangle=90
+#     fig, ax = plt.subplots()
+#     wedges, texts, autotexts = ax.pie(
+#         value_counts,
+#         autopct='%1.1f%%',
+#         labels=labels,
+#         colors=colors,
+#         textprops={'color': 'white', 'fontsize': 12, 'weight': 'bold'},
+#         startangle=90
+#     )
+
+#     # Set title
+#     ax.set_title('Simple vs Complex Orders')
+
+#     # Add comment below the plot
+#     fig.text(
+#         0.5, 0.01,
+#         'Complex orders have multiple types of items (from various vendors or same vendor), \n simple orders have only one type of item',
+#         ha='center', va='bottom', fontsize=10, wrap=True
+#     )
+
+#     # Add legend
+#     ax.legend(wedges, labels, title="Order Type", loc="center left", bbox_to_anchor=(1, 0.5))
+
+#     plt.tight_layout()
+#     #plt.show()
+#     return fig
+def plot_simple_and_complex_order(merged_df):
+    # Utiliser set pour obtenir les valeurs uniques dans les listes
+    agg_df = merged_df.groupby('cmd').agg({
+        'delivery_date': lambda x: list(set(x)),
+        'vendor': lambda x: list(set(x))
+    })
+    agg_df['delivery_date_nb'] = agg_df['delivery_date'].apply(lambda x: len(x))
+    agg_df['delivery_date_complex'] = agg_df['delivery_date_nb'] > 1
+    agg_df['vendor_nb'] = agg_df['vendor'].apply(lambda x: len(x))
+    agg_df['vendor_complex'] = agg_df['vendor_nb'] > 1
+    agg_df['total_nb'] = agg_df['delivery_date_nb'] + agg_df['vendor_nb']
+    agg_df['complex'] = agg_df['total_nb'] > 2
+    agg_df['double_complex'] = agg_df['delivery_date_complex'] & agg_df['vendor_complex']
+    agg_df
+
+    # Fix: axes from plt.subplots(2, 2, ...) is a 2D numpy array, not a flat list.
+    fig, axes = plt.subplots(2, 2, figsize=(18, 6))
+
+    # Flatten axes for easy indexing
+    axes_flat = axes.flatten()
+
+    # Helper to ensure correct label order for value_counts
+    def plot_pie(series, ax, title, colors):
+        # Ensure 'Simple' is False, 'Complex' is True
+        counts = series.value_counts().reindex([False, True], fill_value=0)
+        labels = ['Simple', 'Complex']
+        counts.plot.pie(
+            labels=labels,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=colors,
+            ax=ax
+        )
+        ax.set_title(title, fontsize=12)  # Reduced font size
+        ax.set_ylabel('')
+
+    # Delivery Date Complexity Pie
+    plot_pie(
+        agg_df['delivery_date_complex'],
+        axes_flat[0],
+        '% of orders with multiple delivery dates',
+        ['#66b3ff', '#ff9999']
     )
 
-    # Set title
-    ax.set_title('Simple vs Complex Orders')
-
-    # Add comment below the plot
-    fig.text(
-        0.5, 0.01,
-        'Complex orders have multiple types of items (from various vendors or same vendor), \n simple orders have only one type of item',
-        ha='center', va='bottom', fontsize=10, wrap=True
+    # Vendor Complexity Pie
+    plot_pie(
+        agg_df['vendor_complex'],
+        axes_flat[1],
+        '% of orders with multiple vendors',
+        ['#99ff99', '#ffcc99']
     )
 
-    # Add legend
-    ax.legend(wedges, labels, title="Order Type", loc="center left", bbox_to_anchor=(1, 0.5))
+    # Overall Complexity Pie
+    plot_pie(
+        agg_df['complex'],
+        axes_flat[2],
+        '% of orders with multiple vendors OR delivery dates',
+        ['#c2c2f0', '#ffb3e6']
+    )
+
+    # Double Complexity Pie
+    plot_pie(
+        agg_df['double_complex'],
+        axes_flat[3],
+        '% of orders with multiple vendors AND delivery dates',
+        ['#46b1ff', '#ff5939']
+    )
 
     plt.tight_layout()
-    #plt.show()
     return fig
+
 
 
 # %%
@@ -4111,7 +4526,9 @@ def find_nb_cmd(df):
     'before_sub': 'first',
     'in_y1': 'first',
     'in_y2': 'first',
-    'in_y3': 'first'})
+    'in_y3': 'first',
+    'from_created_to_today': 'first'
+    })
 
     nb_cmd_alltime_df['cmd'] = nb_cmd_alltime_df.index
 
@@ -4123,7 +4540,8 @@ def find_nb_cmd(df):
         'before_sub': 'first',
         'in_y1': 'first',
         'in_y2': 'first',
-        'in_y3': 'first'
+        'in_y3': 'first',
+        'from_created_to_today': 'first'
     })
 
     nb_cmd_alltime_df = nb_cmd_alltime_df.rename(columns={'items_price': 'cmd_price_mean', 'cmd': 'total_cmd'})
@@ -4238,6 +4656,10 @@ def plot_nb_cmd_by_customer_y1_y2(y1_df, y2_df, status):
         status_color = 'red'
 
 
+    y1_df = y1_df[y1_df['from_created_to_today'] > 364]
+    y2_df = y2_df[y2_df['from_created_to_today'] > 729]
+
+
     y1_df = y1_df[y1_df['is_full_member'] == status]
     y2_df = y2_df[y2_df['is_full_member'] == status]
 
@@ -4338,7 +4760,7 @@ def plot_renew_churn_metrics(df):
         top_restaurants_churn = churn_y2_df.groupby('customer_name').agg({'vendor': 'last'})['vendor'].value_counts(normalize=True).head(5) * 100
 
     # Create figure with four subplots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(11, 8))
 
     # Subplot 1: Mean Number of Orders
     renew_value_orders = metrics['Mean Number of Orders']['Renew']
